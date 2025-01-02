@@ -18,16 +18,24 @@ var session = require('express-session');
 
 var axios = require('axios');
 
+var _require = require('child_process'),
+    exec = _require.exec;
+
+var fs = require('fs');
+
+var PastebinAPI = require('pastebin-js');
+
 var app = express();
 var port = 3000;
-console.log('SESSION_SECRET:', process.env.SESSION_SECRET);
-console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET);
-console.log('CALLBACK_URL:', process.env.CALLBACK_URL);
+var pastebin = new PastebinAPI({
+  'api_dev_key': process.env.PASTEBIN_API_KEY,
+  'api_user_name': process.env.PASTEBIN_USER_NAME,
+  'api_user_password': process.env.PASTEBIN_USER_PASSWORD
+});
 app.use(helmet());
 app.use(bodyParser.json());
 app.use(session({
-  secret: "K4nebYggUR7VWQS#aewbxHMdVT#cpB2X@FKp5fYxtr9EvPCJB!$uau2$gvr#Bd3N",
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
   cookie: {
@@ -37,9 +45,9 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 passport.use(new GoogleStrategy({
-  clientID: "926625572851-81vrf7sounglslt83dl1aqocae271e79.apps.googleusercontent.com",
-  clientSecret: "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",
-  callbackURL: "https://willing-careful-wren.ngrok-free.app/auth/google/callback",
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: process.env.CALLBACK_URL,
   scope: ['profile', 'email', 'https://www.googleapis.com/auth/user.phonenumbers.read']
 }, function (accessToken, refreshToken, profile, done) {
   profile.accessToken = accessToken;
@@ -171,6 +179,66 @@ app.get('/websiteStatus', ensureBearerToken, function _callee(req, res) {
       }
     }
   }, null, null, [[3, 10]]);
+});
+app.post('/reboot', ensureBearerToken, function (req, res) {
+  exec('sudo reboot', function (error, stdout, stderr) {
+    if (error) {
+      return res.status(500).send({
+        message: 'Failed to reboot the server',
+        error: stderr
+      });
+    }
+
+    res.status(200).send({
+      message: 'Server is rebooting...',
+      output: stdout
+    });
+  });
+});
+app.get('/logs', ensureBearerToken, function (req, res) {
+  var logFilePath = '/var/log/syslog'; // Adjust the log file path as needed
+
+  var twelveHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  fs.readFile(logFilePath, 'utf8', function (err, data) {
+    if (err) {
+      return res.status(500).send({
+        message: 'Failed to read logs',
+        error: err
+      });
+    }
+
+    var logs = data.split('\n').filter(function (line) {
+      var logDate = new Date(line.substring(0, 15)); // Adjust date parsing as needed
+
+      return logDate >= twelveHoursAgo;
+    }).join('\n');
+
+    if (logs.length === 0) {
+      return res.status(400).send({
+        message: 'No logs found for the past 12 hours'
+      });
+    }
+
+    console.log('Logs to be sent to Pastebin:', logs);
+    pastebin.createPaste({
+      text: logs,
+      title: 'Server Logs',
+      format: null,
+      privacy: 2,
+      // Unlisted
+      expiration: '1H'
+    }).then(function (data) {
+      res.status(200).send({
+        url: data
+      });
+    }).fail(function (err) {
+      console.error('Failed to create Pastebin:', err);
+      res.status(500).send({
+        message: 'Failed to create Pastebin',
+        error: err
+      });
+    });
+  });
 });
 app.get('/auth/google', passport.authenticate('google', {
   scope: ['profile', 'email', 'https://www.googleapis.com/auth/user.phonenumbers.read']
