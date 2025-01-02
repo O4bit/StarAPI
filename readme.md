@@ -1,10 +1,10 @@
-# P.U.L.S.E.D-API-backend
+# Simple-API
 
 ## Setup
 
 1. **Clone the repository**:
     ```sh
-    git clone https://github.com/yourusername/P.U.L.S.E.D-API-backend.git
+    git clone https://github.com/O4bit/Simple-API.git
     cd P.U.L.S.E.D-API-backend
     ```
 
