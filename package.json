@@ -1,0 +1,28 @@
+{
+    "name": "Simple-API",
+    "version": "1.0.0",
+    "description": "Simple application with Discord and Google OAuth integration.",
+    "main": "app.js",
+    "scripts": {
+    "start": "node app.js",
+    "bot": "node bot.js",
+    "add-token": "node addToken.js"
+    },
+    "dependencies": {
+    "axios": "^0.21.1",
+    "body-parser": "^1.19.0",
+    "crypto": "^1.0.1",
+    "discord.js": "^13.3.1",
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "express-session": "^1.17.2",
+    "helmet": "^4.6.0",
+    "passport": "^0.4.1",
+    "passport-google-oauth20": "^2.0.0",
+    "pastebin-js": "^1.0.0",
+    "pg": "^8.7.1",
+    "systeminformation": "^5.9.9"
+    },
+    "author": "O4bit",
+    "license": "MIT"
+}

@@ -1,3 +1,5 @@
 
 .vscode/settings.json
 .env
+addToken.js
+dist/addToken.dev.js

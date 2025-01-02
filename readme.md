@@ -1,130 +1,65 @@
-# Back-end API for Handling Requests to Receive and Send Data Securely
+# P.U.L.S.E.D-API-backend
 
-## Tutorial to Start API Server
+## Setup
 
-### Prerequisites
-1. Install [Node.js](https://nodejs.org/en) LTS version.
-2. Install [npm](https://www.npmjs.com/get-npm) (comes with Node.js).
+1. **Clone the repository**:
+    ```sh
+    git clone https://github.com/yourusername/P.U.L.S.E.D-API-backend.git
+    cd P.U.L.S.E.D-API-backend
+    ```
 
-### Steps to Start the API Server
+2. **Install dependencies**:
+    ```sh
+    npm install
+    ```
 
-#### 1. Clone the Repository
-First, clone the repository to your local machine:
-```sh
-git clone https://github.com/yourusername/your-repo-name.git
-cd your-repo-name
-```
+3. **Create a [.env](http://_vscodecontentref_/2) file**:
+    ```properties
+    SESSION_SECRET="your_session_secret"
+    GOOGLE_CLIENT_ID="your_google_client_id"
+    GOOGLE_CLIENT_SECRET="your_google_client_secret"
+    CALLBACK_URL="your_callback_url"
+    DISCORD_TOKEN="your_discord_token"
+    API_URL="your_api_url"
+    API_TOKEN="your_api_token"
+    DISCORD_CHANNEL_ID="your_discord_channel_id"
+    DISCORD_WEBHOOK_URL="your_discord_webhook_url"
+    PASTEBIN_API_KEY="your_pastebin_api_key"
+    PASTEBIN_USER_NAME="your_pastebin_username"
+    PASTEBIN_USER_PASSWORD="your_pastebin_password"
+    CLIENT_ID="your_discord_client_id"
+    GUILD_ID="your_discord_guild_id"
+    VERIFIED_ROLE_ID="your_verified_role_id"
+    ```
 
-#### 2. Install Required Packages
-Navigate to the project directory and install the required packages:
-```sh
-npm install
-```
+4. **Run the application**:
+    ```sh
+    npm start
+    ```
 
-#### 3. Set Up Environment Variables
-Create a 
+## Usage
 
-.env
+### Bot Commands
 
- file in the root of your project and add the following environment variables:
-```
-SESSION_SECRET=your_session_secret
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-CALLBACK_URL=http://your-ngrok-url/auth/google/callback
-```
-Replace `your_session_secret`, `your_google_client_id`, `your_google_client_secret`, and `your-ngrok-url` with your actual values.
+- `/status`: Get the server status.
+- `/reboot`: Reboot the server.
+- `/logs`: Get the server logs.
+- `/console`: Execute a command on the server.
+- `/verify`: Verify your account with a bearer token.
 
-#### 4. Start ngrok
-If you are using ngrok to expose your local server, start ngrok:
-```sh
-ngrok http 3000
-```
-Copy the URL provided by ngrok and update the `CALLBACK_URL` in your 
+### API Endpoints
 
-.env
+- `GET /health`: Get the server health.
+- `GET /systeminfo`: Get the system information.
+- `GET /websiteStatus`: Check the website status.
+- `POST /reboot`: Reboot the server.
+- `GET /logs`: Get the server logs.
+- `POST /verify`: Verify a bearer token.
 
- file.
+## Contributing
 
-#### 5. Start the Server
-Start the API server:
-```sh
-npm start
-```
-The server will start and listen on port 3000.
+Feel free to submit issues and pull requests.
 
-### Endpoints
+## License
 
-#### 1. Google OAuth Authentication
-Initiate the OAuth flow by navigating to:
-```
-http://your-ngrok-url/auth/google
-```
-
-#### 2. Receive Data
-Send a POST request to `/receive` with the data you want to encrypt:
-```
-POST http://your-ngrok-url/receive
-Headers:
-  Authorization: Bearer your_access_token
-Body:
-  {
-    "data": "This is some data"
-  }
-```
-
-#### 3. Send Data
-Send a GET request to `/send` to receive encrypted data:
-```
-GET http://your-ngrok-url/send
-Headers:
-  Authorization: Bearer your_access_token
-```
-
-#### 4. Health Check
-Send a GET request to `/health` to check the API health and statistics:
-```
-GET http://your-ngrok-url/health
-Headers:
-  Authorization: Bearer your_access_token
-```
-
-### Example using Postman
-
-1. **Open Postman**.
-2. **Set the request type to GET or POST**.
-3. **Enter the URL**:
-   ```
-   http://your-ngrok-url/receive
-   ```
-4. **Go to the Authorization tab**.
-5. **Select Bearer Token** as the type.
-6. **Enter the access token**.
-7. **Set the request body (for POST requests)**:
-   ```json
-   {
-     "data": "This is some data"
-   }
-   ```
-8. **Send the request**.
-
-### Example using cURL
-
-```sh
-curl -H "Authorization: Bearer your_access_token" -X POST -d '{"data":"This is some data"}' http://your-ngrok-url/receive
-```
-
-### Notes
-- Ensure your 
-
-.env
-
- file is added to 
-
-.gitignore
-
- to prevent it from being committed to your repository.
-- Replace `your_access_token` with the actual access token obtained from the OAuth flow.
-
-By following these steps, you can set up and start the API server, and use the provided endpoints to receive and send data securely.
-```
+This project is licensed under the MIT License.

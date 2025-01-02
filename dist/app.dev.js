@@ -25,12 +25,26 @@ var fs = require('fs');
 
 var PastebinAPI = require('pastebin-js');
 
+var si = require('systeminformation');
+
+var path = require('path');
+
+var _require2 = require('pg'),
+    Pool = _require2.Pool;
+
 var app = express();
-var port = 3000;
+var port = process.env.PORT || 3000;
 var pastebin = new PastebinAPI({
   'api_dev_key': process.env.PASTEBIN_API_KEY,
   'api_user_name': process.env.PASTEBIN_USER_NAME,
   'api_user_password': process.env.PASTEBIN_USER_PASSWORD
+});
+var pool = new Pool({
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: process.env.PGPORT
 });
 app.use(helmet());
 app.use(bodyParser.json());
@@ -49,9 +63,34 @@ passport.use(new GoogleStrategy({
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: process.env.CALLBACK_URL,
   scope: ['profile', 'email', 'https://www.googleapis.com/auth/user.phonenumbers.read']
-}, function (accessToken, refreshToken, profile, done) {
-  profile.accessToken = accessToken;
-  return done(null, profile);
+}, function _callee(accessToken, refreshToken, profile, done) {
+  return regeneratorRuntime.async(function _callee$(_context) {
+    while (1) {
+      switch (_context.prev = _context.next) {
+        case 0:
+          profile.accessToken = accessToken;
+          _context.prev = 1;
+          _context.next = 4;
+          return regeneratorRuntime.awrap(pool.query('INSERT INTO tokens (token) VALUES ($1) ON CONFLICT (token) DO NOTHING', [accessToken]));
+
+        case 4:
+          _context.next = 9;
+          break;
+
+        case 6:
+          _context.prev = 6;
+          _context.t0 = _context["catch"](1);
+          console.error('Error storing token:', _context.t0);
+
+        case 9:
+          return _context.abrupt("return", done(null, profile));
+
+        case 10:
+        case "end":
+          return _context.stop();
+      }
+    }
+  }, null, null, [[1, 6]]);
 }));
 passport.serializeUser(function (user, done) {
   done(null, user);
@@ -84,49 +123,105 @@ var ensureAuthenticated = function ensureAuthenticated(req, res, next) {
 };
 
 var ensureBearerToken = function ensureBearerToken(req, res, next) {
-  var authHeader = req.headers.authorization;
+  var authHeader, token, result;
+  return regeneratorRuntime.async(function ensureBearerToken$(_context2) {
+    while (1) {
+      switch (_context2.prev = _context2.next) {
+        case 0:
+          authHeader = req.headers.authorization;
 
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    var token = authHeader.split(' ')[1];
-    req.accessToken = token;
-    next();
-  } else {
-    res.status(401).send('Access denied. Bearer token required.');
-  }
+          if (!(authHeader && authHeader.startsWith('Bearer '))) {
+            _context2.next = 16;
+            break;
+          }
+
+          token = authHeader.split(' ')[1];
+          _context2.prev = 3;
+          _context2.next = 6;
+          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens WHERE token = $1', [token]));
+
+        case 6:
+          result = _context2.sent;
+
+          if (result.rows.length > 0) {
+            req.accessToken = token;
+            next();
+          } else {
+            res.status(401).send('Access denied. Invalid bearer token.');
+          }
+
+          _context2.next = 14;
+          break;
+
+        case 10:
+          _context2.prev = 10;
+          _context2.t0 = _context2["catch"](3);
+          console.error('Error verifying token:', _context2.t0);
+          res.status(500).send({
+            message: 'Verification failed',
+            error: _context2.t0
+          });
+
+        case 14:
+          _context2.next = 17;
+          break;
+
+        case 16:
+          res.status(401).send('Access denied. Bearer token required.');
+
+        case 17:
+        case "end":
+          return _context2.stop();
+      }
+    }
+  }, null, null, [[3, 10]]);
 };
 
-var encryptData = function encryptData(data) {
-  var algorithm = 'aes-256-cbc';
-  var key = crypto.randomBytes(32);
-  var iv = crypto.randomBytes(16);
-  var cipher = crypto.createCipheriv(algorithm, key, iv);
-  var encrypted = cipher.update(data, 'utf8', 'hex');
-  encrypted += cipher["final"]('hex');
-  return {
-    iv: iv.toString('hex'),
-    key: key.toString('hex'),
-    encryptedData: encrypted
-  };
-};
+app.post('/verify', function _callee2(req, res) {
+  var token, result;
+  return regeneratorRuntime.async(function _callee2$(_context3) {
+    while (1) {
+      switch (_context3.prev = _context3.next) {
+        case 0:
+          token = req.body.token;
+          _context3.prev = 1;
+          _context3.next = 4;
+          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens WHERE token = $1', [token]));
 
-app.post('/receive', ensureAuthenticated, function (req, res) {
-  var data = req.body.data;
-  var encrypted = encryptData(data);
-  console.log("Received encrypted data: ".concat(encrypted.encryptedData, " from anonymous ID: ").concat(req.anonymousId));
-  res.status(200).send({
-    message: 'Data received anonymously and securely',
-    encryptedData: encrypted.encryptedData
-  });
+        case 4:
+          result = _context3.sent;
+
+          if (result.rows.length > 0) {
+            res.status(200).send({
+              verified: true
+            });
+          } else {
+            res.status(401).send({
+              verified: false,
+              message: 'Invalid token'
+            });
+          }
+
+          _context3.next = 12;
+          break;
+
+        case 8:
+          _context3.prev = 8;
+          _context3.t0 = _context3["catch"](1);
+          console.error('Error verifying token:', _context3.t0);
+          res.status(500).send({
+            message: 'Verification failed',
+            error: _context3.t0
+          });
+
+        case 12:
+        case "end":
+          return _context3.stop();
+      }
+    }
+  }, null, null, [[1, 8]]);
 });
-app.get('/send', ensureAuthenticated, function (req, res) {
-  var data = "This is some anonymous data";
-  var encrypted = encryptData(data);
-  console.log("Sending encrypted data: ".concat(encrypted.encryptedData, " to anonymous ID: ").concat(req.anonymousId));
-  res.status(200).send({
-    encryptedData: encrypted.encryptedData
-  });
-});
-app.get('/health', ensureBearerToken, function (req, res) {
+app.get('/apihealth', ensureBearerToken, function (req, res) {
   var healthData = {
     uptime: process.uptime(),
     requestCount: requestCount,
@@ -134,111 +229,185 @@ app.get('/health', ensureBearerToken, function (req, res) {
   };
   res.status(200).send(healthData);
 });
-app.get('/websiteStatus', ensureBearerToken, function _callee(req, res) {
-  var url, response;
-  return regeneratorRuntime.async(function _callee$(_context) {
-    while (1) {
-      switch (_context.prev = _context.next) {
-        case 0:
-          url = req.query.url;
-
-          if (url) {
-            _context.next = 3;
-            break;
-          }
-
-          return _context.abrupt("return", res.status(400).send({
-            message: 'URL query parameter is required'
-          }));
-
-        case 3:
-          _context.prev = 3;
-          _context.next = 6;
-          return regeneratorRuntime.awrap(axios.get(url));
-
-        case 6:
-          response = _context.sent;
-          res.status(200).send({
-            status: 'up',
-            statusCode: response.status
-          });
-          _context.next = 13;
-          break;
-
-        case 10:
-          _context.prev = 10;
-          _context.t0 = _context["catch"](3);
-          res.status(200).send({
-            status: 'down',
-            statusCode: _context.t0.response ? _context.t0.response.status : 'unknown'
-          });
-
-        case 13:
-        case "end":
-          return _context.stop();
-      }
-    }
-  }, null, null, [[3, 10]]);
-});
-app.post('/reboot', ensureBearerToken, function (req, res) {
-  exec('sudo reboot', function (error, stdout, stderr) {
+app.get('/health', ensureBearerToken, function (req, res) {
+  exec('uptime -p', function (error, stdout, stderr) {
     if (error) {
       return res.status(500).send({
-        message: 'Failed to reboot the server',
+        message: 'Failed to get server uptime',
         error: stderr
       });
     }
 
     res.status(200).send({
-      message: 'Server is rebooting...',
-      output: stdout
+      uptime: stdout.trim(),
+      status: 'Server is running'
     });
   });
 });
-app.get('/logs', ensureBearerToken, function (req, res) {
-  var logFilePath = '/var/log/syslog'; // Adjust the log file path as needed
+app.get('/systeminfo', ensureBearerToken, function _callee3(req, res) {
+  var systemInfo;
+  return regeneratorRuntime.async(function _callee3$(_context4) {
+    while (1) {
+      switch (_context4.prev = _context4.next) {
+        case 0:
+          _context4.prev = 0;
+          _context4.next = 3;
+          return regeneratorRuntime.awrap(si.get({
+            cpu: 'manufacturer, brand, speed, cores',
+            mem: 'total, free',
+            osInfo: 'platform, distro, release, kernel',
+            currentLoad: 'currentLoad',
+            networkInterfaces: 'ip4'
+          }));
 
-  var twelveHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  fs.readFile(logFilePath, 'utf8', function (err, data) {
-    if (err) {
-      return res.status(500).send({
-        message: 'Failed to read logs',
-        error: err
-      });
+        case 3:
+          systemInfo = _context4.sent;
+          res.status(200).send(systemInfo);
+          _context4.next = 10;
+          break;
+
+        case 7:
+          _context4.prev = 7;
+          _context4.t0 = _context4["catch"](0);
+          res.status(500).send({
+            message: 'Failed to retrieve system information',
+            error: _context4.t0
+          });
+
+        case 10:
+        case "end":
+          return _context4.stop();
+      }
     }
+  }, null, null, [[0, 7]]);
+});
+app.get('/websiteStatus', ensureBearerToken, function _callee4(req, res) {
+  var url, response;
+  return regeneratorRuntime.async(function _callee4$(_context5) {
+    while (1) {
+      switch (_context5.prev = _context5.next) {
+        case 0:
+          url = req.query.url;
 
-    var logs = data.split('\n').filter(function (line) {
-      var logDate = new Date(line.substring(0, 15)); // Adjust date parsing as needed
+          if (url) {
+            _context5.next = 3;
+            break;
+          }
 
-      return logDate >= twelveHoursAgo;
-    }).join('\n');
+          return _context5.abrupt("return", res.status(400).send({
+            message: 'URL query parameter is required'
+          }));
 
-    if (logs.length === 0) {
-      return res.status(400).send({
-        message: 'No logs found for the past 12 hours'
-      });
+        case 3:
+          _context5.prev = 3;
+          _context5.next = 6;
+          return regeneratorRuntime.awrap(axios.get(url));
+
+        case 6:
+          response = _context5.sent;
+          res.status(200).send({
+            status: 'up',
+            statusCode: response.status
+          });
+          _context5.next = 13;
+          break;
+
+        case 10:
+          _context5.prev = 10;
+          _context5.t0 = _context5["catch"](3);
+          res.status(200).send({
+            status: 'down',
+            statusCode: _context5.t0.response ? _context5.t0.response.status : 'unknown'
+          });
+
+        case 13:
+        case "end":
+          return _context5.stop();
+      }
     }
+  }, null, null, [[3, 10]]);
+});
+app.get('/logs', ensureBearerToken, function _callee5(req, res) {
+  var logFiles, oneHourAgo, severityLevels, logs, _i, _logFiles, logFile, data, filteredLogs, pastebinResponse;
 
-    console.log('Logs to be sent to Pastebin:', logs);
-    pastebin.createPaste({
-      text: logs,
-      title: 'Server Logs',
-      format: null,
-      privacy: 2,
-      // Unlisted
-      expiration: '1H'
-    }).then(function (data) {
-      res.status(200).send({
-        url: data
-      });
-    }).fail(function (err) {
-      console.error('Failed to create Pastebin:', err);
-      res.status(500).send({
-        message: 'Failed to create Pastebin',
-        error: err
-      });
-    });
-  });
+  return regeneratorRuntime.async(function _callee5$(_context6) {
+    while (1) {
+      switch (_context6.prev = _context6.next) {
+        case 0:
+          logFiles = ['/var/log/syslog', '/var/log/syslog.1']; // Add more log files if needed
+
+          oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
+          severityLevels = ['warning', 'error', 'critical'];
+          logs = '';
+
+          for (_i = 0, _logFiles = logFiles; _i < _logFiles.length; _i++) {
+            logFile = _logFiles[_i];
+
+            try {
+              data = fs.readFileSync(logFile, 'utf8');
+              filteredLogs = data.split('\n').filter(function (line) {
+                // Adjust date parsing as needed
+                var logDateMatch = line.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+                if (!logDateMatch) return false;
+                var logDate = new Date(logDateMatch[0]);
+                var severity = severityLevels.some(function (level) {
+                  return line.toLowerCase().includes(level);
+                });
+                return logDate >= oneHourAgo && severity;
+              }).join('\n');
+              logs += filteredLogs;
+            } catch (err) {
+              console.error("Failed to read log file ".concat(logFile, ":"), err);
+            }
+          }
+
+          if (!(logs.length === 0)) {
+            _context6.next = 8;
+            break;
+          }
+
+          console.log('No relevant logs found for the past hour');
+          return _context6.abrupt("return", res.status(400).send({
+            message: 'No relevant logs found for the past hour'
+          }));
+
+        case 8:
+          console.log('Logs to be sent to Pastebin:', logs);
+          _context6.prev = 9;
+          _context6.next = 12;
+          return regeneratorRuntime.awrap(pastebin.createPaste({
+            text: logs,
+            title: 'Server Logs',
+            format: null,
+            privacy: 2,
+            // Unlisted
+            expiration: '1H'
+          }));
+
+        case 12:
+          pastebinResponse = _context6.sent;
+          console.log('Pastebin URL:', pastebinResponse);
+          res.status(200).send({
+            url: pastebinResponse
+          });
+          _context6.next = 21;
+          break;
+
+        case 17:
+          _context6.prev = 17;
+          _context6.t0 = _context6["catch"](9);
+          console.error('Failed to create Pastebin:', _context6.t0);
+          res.status(500).send({
+            message: 'Failed to create Pastebin',
+            error: _context6.t0
+          });
+
+        case 21:
+        case "end":
+          return _context6.stop();
+      }
+    }
+  }, null, null, [[9, 17]]);
 });
 app.get('/auth/google', passport.authenticate('google', {
   scope: ['profile', 'email', 'https://www.googleapis.com/auth/user.phonenumbers.read']
@@ -254,4 +423,11 @@ app.get('/dashboard', function (req, res) {
 });
 app.listen(port, function () {
   console.log("API listening at http://localhost:".concat(port));
+}).on('error', function (err) {
+  if (err.code === 'EADDRINUSE') {
+    console.error("Port ".concat(port, " is already in use"));
+    process.exit(1);
+  } else {
+    throw err;
+  }
 });
