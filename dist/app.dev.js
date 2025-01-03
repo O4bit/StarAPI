@@ -19,7 +19,8 @@ var session = require('express-session');
 var axios = require('axios');
 
 var _require = require('child_process'),
-    exec = _require.exec;
+    exec = _require.exec; // Import exec
+
 
 var fs = require('fs');
 

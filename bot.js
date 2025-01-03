@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { exec } = require('child_process'); // Import exec
 const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 

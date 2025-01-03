@@ -2,12 +2,16 @@
 
 require('dotenv').config();
 
-var _require = require('discord.js'),
-    Client = _require.Client,
-    GatewayIntentBits = _require.GatewayIntentBits,
-    REST = _require.REST,
-    Routes = _require.Routes,
-    EmbedBuilder = _require.EmbedBuilder;
+var _require = require('child_process'),
+    exec = _require.exec; // Import exec
+
+
+var _require2 = require('discord.js'),
+    Client = _require2.Client,
+    GatewayIntentBits = _require2.GatewayIntentBits,
+    REST = _require2.REST,
+    Routes = _require2.Routes,
+    EmbedBuilder = _require2.EmbedBuilder;
 
 var axios = require('axios');
 
