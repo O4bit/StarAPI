@@ -44,6 +44,23 @@ client.on('interactionCreate', async interaction => {
         } catch (error) {
             await interaction.editReply(`Error: ${error.message}`);
         }
+    } else if (commandName === 'neofetch') {
+        await interaction.deferReply();
+        try {
+            const response = await axios.get(`${API_URL}/neofetch`, {
+                headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
+            });
+            const embed = new EmbedBuilder()
+                .setColor('#0099ff')
+                .setTitle('Neofetch')
+                .setDescription(`\`\`\`${response.data.output}\`\`\``)
+                .setTimestamp()
+                .setFooter({ text: 'Neofetch Output' });
+
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            await interaction.editReply(`Error: ${error.message}`);
+        }
     } else {
         // Check if the user has the verified role
         const guild = client.guilds.cache.get(GUILD_ID);
@@ -226,6 +243,10 @@ async function registerCommands() {
                     required: true
                 }
             ]
+        },
+        {
+            name: 'neofetch',
+            description: 'Run neofetch and display the output'
         }
     ];
 

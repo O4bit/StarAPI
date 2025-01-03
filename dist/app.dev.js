@@ -282,6 +282,20 @@ app.get('/systeminfo', ensureBearerToken, function _callee3(req, res) {
     }
   }, null, null, [[0, 7]]);
 });
+app.get('/neofetch', ensureBearerToken, function (req, res) {
+  exec('neofetch --stdout', function (error, stdout, stderr) {
+    if (error) {
+      return res.status(500).send({
+        message: 'Failed to run neofetch',
+        error: stderr
+      });
+    }
+
+    res.status(200).send({
+      output: stdout
+    });
+  });
+});
 app.get('/websiteStatus', ensureBearerToken, function _callee4(req, res) {
   var url, response;
   return regeneratorRuntime.async(function _callee4$(_context5) {

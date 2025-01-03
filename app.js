@@ -161,6 +161,15 @@ app.get('/systeminfo', ensureBearerToken, async (req, res) => {
     }
 });
 
+app.get('/neofetch', ensureBearerToken, (req, res) => {
+    exec('neofetch --stdout', (error, stdout, stderr) => {
+        if (error) {
+            return res.status(500).send({ message: 'Failed to run neofetch', error: stderr });
+        }
+        res.status(200).send({ output: stdout });
+    });
+});
+
 app.get('/websiteStatus', ensureBearerToken, async (req, res) => {
     const url = req.query.url;
     if (!url) {

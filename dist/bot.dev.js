@@ -31,7 +31,7 @@ client.once('ready', function () {
   monitorServer();
 });
 client.on('interactionCreate', function _callee(interaction) {
-  var commandName, token, response, guild, member, role, _guild, _member, status, _response, logs, embed, command, output;
+  var commandName, token, response, guild, member, role, _response, embed, _guild, _member, status, _response2, logs, _embed, command, output;
 
   return regeneratorRuntime.async(function _callee$(_context) {
     while (1) {
@@ -116,138 +116,180 @@ client.on('interactionCreate', function _callee(interaction) {
           return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context.t0.message)));
 
         case 36:
-          _context.next = 93;
+          _context.next = 111;
           break;
 
         case 38:
-          // Check if the user has the verified role
-          _guild = client.guilds.cache.get(GUILD_ID);
-          _context.next = 41;
-          return regeneratorRuntime.awrap(_guild.members.fetch(interaction.user.id));
-
-        case 41:
-          _member = _context.sent;
-
-          if (_member.roles.cache.has(VERIFIED_ROLE_ID)) {
-            _context.next = 46;
-            break;
-          }
-
-          _context.next = 45;
-          return regeneratorRuntime.awrap(interaction.reply('You do not have the verified role to use this command.'));
-
-        case 45:
-          return _context.abrupt("return");
-
-        case 46:
-          if (!(commandName === 'status')) {
+          if (!(commandName === 'neofetch')) {
             _context.next = 56;
             break;
           }
 
-          _context.next = 49;
+          _context.next = 41;
           return regeneratorRuntime.awrap(interaction.deferReply());
 
-        case 49:
-          _context.next = 51;
-          return regeneratorRuntime.awrap(getServerStatus());
-
-        case 51:
-          status = _context.sent;
-          _context.next = 54;
-          return regeneratorRuntime.awrap(interaction.editReply({
-            embeds: [status]
+        case 41:
+          _context.prev = 41;
+          _context.next = 44;
+          return regeneratorRuntime.awrap(axios.get("".concat(API_URL, "/neofetch"), {
+            headers: {
+              Authorization: "Bearer ".concat(process.env.API_TOKEN)
+            }
           }));
 
-        case 54:
-          _context.next = 93;
-          break;
-
-        case 56:
-          if (!(commandName === 'reboot')) {
-            _context.next = 66;
-            break;
-          }
-
-          _context.next = 59;
-          return regeneratorRuntime.awrap(interaction.deferReply());
-
-        case 59:
-          _context.next = 61;
-          return regeneratorRuntime.awrap(rebootServer());
-
-        case 61:
+        case 44:
           _response = _context.sent;
-          _context.next = 64;
-          return regeneratorRuntime.awrap(interaction.editReply(_response));
-
-        case 64:
-          _context.next = 93;
-          break;
-
-        case 66:
-          if (!(commandName === 'logs')) {
-            _context.next = 77;
-            break;
-          }
-
-          _context.next = 69;
-          return regeneratorRuntime.awrap(interaction.deferReply());
-
-        case 69:
-          _context.next = 71;
-          return regeneratorRuntime.awrap(getServerLogs());
-
-        case 71:
-          logs = _context.sent;
-          embed = new EmbedBuilder().setColor('#0099ff').setTitle('Server Logs').setDescription("Logs from the last hour: [View Logs](".concat(logs, ")")).setTimestamp().setFooter({
-            text: 'Logs from the last hour'
+          embed = new EmbedBuilder().setColor('#0099ff').setTitle('Neofetch').setDescription("```".concat(_response.data.output, "```")).setTimestamp().setFooter({
+            text: 'Neofetch Output'
           });
-          _context.next = 75;
+          _context.next = 48;
           return regeneratorRuntime.awrap(interaction.editReply({
             embeds: [embed]
           }));
 
-        case 75:
-          _context.next = 93;
+        case 48:
+          _context.next = 54;
           break;
 
-        case 77:
-          if (!(commandName === 'console')) {
-            _context.next = 93;
+        case 50:
+          _context.prev = 50;
+          _context.t1 = _context["catch"](41);
+          _context.next = 54;
+          return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context.t1.message)));
+
+        case 54:
+          _context.next = 111;
+          break;
+
+        case 56:
+          // Check if the user has the verified role
+          _guild = client.guilds.cache.get(GUILD_ID);
+          _context.next = 59;
+          return regeneratorRuntime.awrap(_guild.members.fetch(interaction.user.id));
+
+        case 59:
+          _member = _context.sent;
+
+          if (_member.roles.cache.has(VERIFIED_ROLE_ID)) {
+            _context.next = 64;
             break;
           }
 
-          _context.next = 80;
+          _context.next = 63;
+          return regeneratorRuntime.awrap(interaction.reply('You do not have the verified role to use this command.'));
+
+        case 63:
+          return _context.abrupt("return");
+
+        case 64:
+          if (!(commandName === 'status')) {
+            _context.next = 74;
+            break;
+          }
+
+          _context.next = 67;
           return regeneratorRuntime.awrap(interaction.deferReply());
 
-        case 80:
-          command = interaction.options.getString('command');
-          _context.prev = 81;
-          _context.next = 84;
-          return regeneratorRuntime.awrap(executeCommand(command));
+        case 67:
+          _context.next = 69;
+          return regeneratorRuntime.awrap(getServerStatus());
 
-        case 84:
-          output = _context.sent;
-          _context.next = 87;
-          return regeneratorRuntime.awrap(sendLongMessage(interaction, output));
+        case 69:
+          status = _context.sent;
+          _context.next = 72;
+          return regeneratorRuntime.awrap(interaction.editReply({
+            embeds: [status]
+          }));
 
-        case 87:
-          _context.next = 93;
+        case 72:
+          _context.next = 111;
           break;
 
+        case 74:
+          if (!(commandName === 'reboot')) {
+            _context.next = 84;
+            break;
+          }
+
+          _context.next = 77;
+          return regeneratorRuntime.awrap(interaction.deferReply());
+
+        case 77:
+          _context.next = 79;
+          return regeneratorRuntime.awrap(rebootServer());
+
+        case 79:
+          _response2 = _context.sent;
+          _context.next = 82;
+          return regeneratorRuntime.awrap(interaction.editReply(_response2));
+
+        case 82:
+          _context.next = 111;
+          break;
+
+        case 84:
+          if (!(commandName === 'logs')) {
+            _context.next = 95;
+            break;
+          }
+
+          _context.next = 87;
+          return regeneratorRuntime.awrap(interaction.deferReply());
+
+        case 87:
+          _context.next = 89;
+          return regeneratorRuntime.awrap(getServerLogs());
+
         case 89:
-          _context.prev = 89;
-          _context.t1 = _context["catch"](81);
+          logs = _context.sent;
+          _embed = new EmbedBuilder().setColor('#0099ff').setTitle('Server Logs').setDescription("Logs from the last hour: [View Logs](".concat(logs, ")")).setTimestamp().setFooter({
+            text: 'Logs from the last hour'
+          });
           _context.next = 93;
-          return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context.t1.message)));
+          return regeneratorRuntime.awrap(interaction.editReply({
+            embeds: [_embed]
+          }));
 
         case 93:
+          _context.next = 111;
+          break;
+
+        case 95:
+          if (!(commandName === 'console')) {
+            _context.next = 111;
+            break;
+          }
+
+          _context.next = 98;
+          return regeneratorRuntime.awrap(interaction.deferReply());
+
+        case 98:
+          command = interaction.options.getString('command');
+          _context.prev = 99;
+          _context.next = 102;
+          return regeneratorRuntime.awrap(executeCommand(command));
+
+        case 102:
+          output = _context.sent;
+          _context.next = 105;
+          return regeneratorRuntime.awrap(sendLongMessage(interaction, output));
+
+        case 105:
+          _context.next = 111;
+          break;
+
+        case 107:
+          _context.prev = 107;
+          _context.t2 = _context["catch"](99);
+          _context.next = 111;
+          return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context.t2.message)));
+
+        case 111:
         case "end":
           return _context.stop();
       }
     }
-  }, null, null, [[7, 32], [81, 89]]);
+  }, null, null, [[7, 32], [41, 50], [99, 107]]);
 });
 
 function monitorServer() {
@@ -601,6 +643,9 @@ function registerCommands() {
               description: 'The bearer token',
               required: true
             }]
+          }, {
+            name: 'neofetch',
+            description: 'Run neofetch and display the output'
           }];
           rest = new REST({
             version: '9'
