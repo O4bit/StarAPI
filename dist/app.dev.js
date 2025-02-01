@@ -222,6 +222,126 @@ app.post('/verify', function _callee2(req, res) {
     }
   }, null, null, [[1, 8]]);
 });
+app.get('/tokens', ensureBearerToken, function _callee3(req, res) {
+  var result;
+  return regeneratorRuntime.async(function _callee3$(_context4) {
+    while (1) {
+      switch (_context4.prev = _context4.next) {
+        case 0:
+          _context4.prev = 0;
+          _context4.next = 3;
+          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens'));
+
+        case 3:
+          result = _context4.sent;
+          res.status(200).send({
+            tokens: result.rows
+          });
+          _context4.next = 11;
+          break;
+
+        case 7:
+          _context4.prev = 7;
+          _context4.t0 = _context4["catch"](0);
+          console.error('Error fetching tokens:', _context4.t0);
+          res.status(500).send({
+            message: 'Failed to fetch tokens',
+            error: _context4.t0
+          });
+
+        case 11:
+        case "end":
+          return _context4.stop();
+      }
+    }
+  }, null, null, [[0, 7]]);
+});
+app["delete"]('/tokens/:id', ensureBearerToken, function _callee4(req, res) {
+  var id, result;
+  return regeneratorRuntime.async(function _callee4$(_context5) {
+    while (1) {
+      switch (_context5.prev = _context5.next) {
+        case 0:
+          id = req.params.id;
+          _context5.prev = 1;
+          _context5.next = 4;
+          return regeneratorRuntime.awrap(pool.query('DELETE FROM tokens WHERE id = $1', [id]));
+
+        case 4:
+          result = _context5.sent;
+
+          if (result.rowCount > 0) {
+            res.status(200).send({
+              message: 'Token deleted successfully'
+            });
+          } else {
+            res.status(404).send({
+              message: 'Token not found'
+            });
+          }
+
+          _context5.next = 12;
+          break;
+
+        case 8:
+          _context5.prev = 8;
+          _context5.t0 = _context5["catch"](1);
+          console.error('Error deleting token:', _context5.t0);
+          res.status(500).send({
+            message: 'Failed to delete token',
+            error: _context5.t0
+          });
+
+        case 12:
+        case "end":
+          return _context5.stop();
+      }
+    }
+  }, null, null, [[1, 8]]);
+});
+app.patch('/tokens/:id/lock', ensureBearerToken, function _callee5(req, res) {
+  var id, result;
+  return regeneratorRuntime.async(function _callee5$(_context6) {
+    while (1) {
+      switch (_context6.prev = _context6.next) {
+        case 0:
+          id = req.params.id;
+          _context6.prev = 1;
+          _context6.next = 4;
+          return regeneratorRuntime.awrap(pool.query('UPDATE tokens SET locked = true WHERE id = $1', [id]));
+
+        case 4:
+          result = _context6.sent;
+
+          if (result.rowCount > 0) {
+            res.status(200).send({
+              message: 'Token locked successfully'
+            });
+          } else {
+            res.status(404).send({
+              message: 'Token not found'
+            });
+          }
+
+          _context6.next = 12;
+          break;
+
+        case 8:
+          _context6.prev = 8;
+          _context6.t0 = _context6["catch"](1);
+          console.error('Error locking token:', _context6.t0);
+          res.status(500).send({
+            message: 'Failed to lock token',
+            error: _context6.t0
+          });
+
+        case 12:
+        case "end":
+          return _context6.stop();
+      }
+    }
+  }, null, null, [[1, 8]]);
+});
 app.get('/apihealth', ensureBearerToken, function (req, res) {
   var healthData = {
     uptime: process.uptime(),
@@ -245,14 +365,14 @@ app.get('/health', ensureBearerToken, function (req, res) {
     });
   });
 });
-app.get('/systeminfo', ensureBearerToken, function _callee3(req, res) {
+app.get('/systeminfo', ensureBearerToken, function _callee6(req, res) {
   var systemInfo;
-  return regeneratorRuntime.async(function _callee3$(_context4) {
+  return regeneratorRuntime.async(function _callee6$(_context7) {
     while (1) {
-      switch (_context4.prev = _context4.next) {
+      switch (_context7.prev = _context7.next) {
         case 0:
-          _context4.prev = 0;
-          _context4.next = 3;
+          _context7.prev = 0;
+          _context7.next = 3;
           return regeneratorRuntime.awrap(si.get({
             cpu: 'manufacturer, brand, speed, cores',
             mem: 'total, free',
@@ -262,22 +382,22 @@ app.get('/systeminfo', ensureBearerToken, function _callee3(req, res) {
           }));
 
         case 3:
-          systemInfo = _context4.sent;
+          systemInfo = _context7.sent;
           res.status(200).send(systemInfo);
-          _context4.next = 10;
+          _context7.next = 10;
           break;
 
         case 7:
-          _context4.prev = 7;
-          _context4.t0 = _context4["catch"](0);
+          _context7.prev = 7;
+          _context7.t0 = _context7["catch"](0);
           res.status(500).send({
             message: 'Failed to retrieve system information',
-            error: _context4.t0
+            error: _context7.t0
           });
 
         case 10:
         case "end":
-          return _context4.stop();
+          return _context7.stop();
       }
     }
   }, null, null, [[0, 7]]);
@@ -296,58 +416,58 @@ app.get('/neofetch', ensureBearerToken, function (req, res) {
     });
   });
 });
-app.get('/websiteStatus', ensureBearerToken, function _callee4(req, res) {
+app.get('/websiteStatus', ensureBearerToken, function _callee7(req, res) {
   var url, response;
-  return regeneratorRuntime.async(function _callee4$(_context5) {
+  return regeneratorRuntime.async(function _callee7$(_context8) {
     while (1) {
-      switch (_context5.prev = _context5.next) {
+      switch (_context8.prev = _context8.next) {
         case 0:
           url = req.query.url;
 
           if (url) {
-            _context5.next = 3;
+            _context8.next = 3;
             break;
           }
 
-          return _context5.abrupt("return", res.status(400).send({
+          return _context8.abrupt("return", res.status(400).send({
             message: 'URL query parameter is required'
           }));
 
         case 3:
-          _context5.prev = 3;
-          _context5.next = 6;
+          _context8.prev = 3;
+          _context8.next = 6;
           return regeneratorRuntime.awrap(axios.get(url));
 
         case 6:
-          response = _context5.sent;
+          response = _context8.sent;
           res.status(200).send({
             status: 'up',
             statusCode: response.status
           });
-          _context5.next = 13;
+          _context8.next = 13;
           break;
 
         case 10:
-          _context5.prev = 10;
-          _context5.t0 = _context5["catch"](3);
+          _context8.prev = 10;
+          _context8.t0 = _context8["catch"](3);
           res.status(200).send({
             status: 'down',
-            statusCode: _context5.t0.response ? _context5.t0.response.status : 'unknown'
+            statusCode: _context8.t0.response ? _context8.t0.response.status : 'unknown'
           });
 
         case 13:
         case "end":
-          return _context5.stop();
+          return _context8.stop();
       }
     }
   }, null, null, [[3, 10]]);
 });
-app.get('/logs', ensureBearerToken, function _callee5(req, res) {
+app.get('/logs', ensureBearerToken, function _callee8(req, res) {
   var logFiles, oneHourAgo, severityLevels, logs, _i, _logFiles, logFile, data, filteredLogs, pastebinResponse;
 
-  return regeneratorRuntime.async(function _callee5$(_context6) {
+  return regeneratorRuntime.async(function _callee8$(_context9) {
     while (1) {
-      switch (_context6.prev = _context6.next) {
+      switch (_context9.prev = _context9.next) {
         case 0:
           logFiles = ['/var/log/syslog', '/var/log/syslog.1']; // Add more log files if needed
 
@@ -377,19 +497,19 @@ app.get('/logs', ensureBearerToken, function _callee5(req, res) {
           }
 
           if (!(logs.length === 0)) {
-            _context6.next = 8;
+            _context9.next = 8;
             break;
           }
 
           console.log('No relevant logs found for the past hour');
-          return _context6.abrupt("return", res.status(400).send({
+          return _context9.abrupt("return", res.status(400).send({
             message: 'No relevant logs found for the past hour'
           }));
 
         case 8:
           console.log('Logs to be sent to Pastebin:', logs);
-          _context6.prev = 9;
-          _context6.next = 12;
+          _context9.prev = 9;
+          _context9.next = 12;
           return regeneratorRuntime.awrap(pastebin.createPaste({
             text: logs,
             title: 'Server Logs',
@@ -400,26 +520,26 @@ app.get('/logs', ensureBearerToken, function _callee5(req, res) {
           }));
 
         case 12:
-          pastebinResponse = _context6.sent;
+          pastebinResponse = _context9.sent;
           console.log('Pastebin URL:', pastebinResponse);
           res.status(200).send({
             url: pastebinResponse
           });
-          _context6.next = 21;
+          _context9.next = 21;
           break;
 
         case 17:
-          _context6.prev = 17;
-          _context6.t0 = _context6["catch"](9);
-          console.error('Failed to create Pastebin:', _context6.t0);
+          _context9.prev = 17;
+          _context9.t0 = _context9["catch"](9);
+          console.error('Failed to create Pastebin:', _context9.t0);
           res.status(500).send({
             message: 'Failed to create Pastebin',
-            error: _context6.t0
+            error: _context9.t0
           });
 
         case 21:
         case "end":
-          return _context6.stop();
+          return _context9.stop();
       }
     }
   }, null, null, [[9, 17]]);

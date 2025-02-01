@@ -127,6 +127,46 @@ app.post('/verify', async (req, res) => {
     }
 });
 
+app.get('/tokens', ensureBearerToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM tokens');
+        res.status(200).send({ tokens: result.rows });
+    } catch (error) {
+        console.error('Error fetching tokens:', error);
+        res.status(500).send({ message: 'Failed to fetch tokens', error });
+    }
+});
+
+app.delete('/tokens/:id', ensureBearerToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM tokens WHERE id = $1', [id]);
+        if (result.rowCount > 0) {
+            res.status(200).send({ message: 'Token deleted successfully' });
+        } else {
+            res.status(404).send({ message: 'Token not found' });
+        }
+    } catch (error) {
+        console.error('Error deleting token:', error);
+        res.status(500).send({ message: 'Failed to delete token', error });
+    }
+});
+
+app.patch('/tokens/:id/lock', ensureBearerToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('UPDATE tokens SET locked = true WHERE id = $1', [id]);
+        if (result.rowCount > 0) {
+            res.status(200).send({ message: 'Token locked successfully' });
+        } else {
+            res.status(404).send({ message: 'Token not found' });
+        }
+    } catch (error) {
+        console.error('Error locking token:', error);
+        res.status(500).send({ message: 'Failed to lock token', error });
+    }
+});
+
 app.get('/apihealth', ensureBearerToken, (req, res) => {
     const healthData = {
         uptime: process.uptime(),
