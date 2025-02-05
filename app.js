@@ -72,6 +72,8 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use('/dashboard', express.static(path.join(__dirname, 'dashboard')));
+
 let requestCount = 0;
 app.use((req, res, next) => {
     requestCount++;

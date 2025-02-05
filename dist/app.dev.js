@@ -103,6 +103,7 @@ app.use(function (req, res, next) {
   req.anonymousId = crypto.randomBytes(16).toString('hex');
   next();
 });
+app.use('/dashboard', express["static"](path.join(__dirname, 'dashboard')));
 var requestCount = 0;
 app.use(function (req, res, next) {
   requestCount++;
