@@ -29,8 +29,6 @@ var path = require('path');
 
 var crypto = require('crypto');
 
-s;
-
 var _require2 = require('pg'),
     Pool = _require2.Pool;
 
