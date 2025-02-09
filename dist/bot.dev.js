@@ -9,8 +9,6 @@ var _require = require('discord.js'),
     Routes = _require.Routes,
     EmbedBuilder = _require.EmbedBuilder;
 
-var crypto = require('crypto');
-
 var axios = require('axios');
 
 var client = new Client({
@@ -19,18 +17,6 @@ var client = new Client({
 var DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 var CLIENT_ID = process.env.CLIENT_ID;
 var API_URL = process.env.API_URL;
-var VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID;
-var algorithm = 'aes-256-cbc';
-var key = crypto.randomBytes(32);
-var iv = crypto.randomBytes(16);
-
-function encrypt(text) {
-  var cipher = crypto.createCipheriv(algorithm, Buffer.from(key), iv);
-  var encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher["final"]()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
-}
-
 client.once('ready', function _callee() {
   return regeneratorRuntime.async(function _callee$(_context) {
     while (1) {
@@ -52,7 +38,7 @@ client.once('ready', function _callee() {
   });
 });
 client.on('interactionCreate', function _callee2(interaction) {
-  var commandName, status, message, logsUrl, command, encryptedCommand, response;
+  var commandName, status, message, logsUrl, command, response;
   return regeneratorRuntime.async(function _callee2$(_context2) {
     while (1) {
       switch (_context2.prev = _context2.next) {
@@ -102,7 +88,7 @@ client.on('interactionCreate', function _callee2(interaction) {
           return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context2.t0.message)));
 
         case 21:
-          _context2.next = 80;
+          _context2.next = 79;
           break;
 
         case 23:
@@ -137,7 +123,7 @@ client.on('interactionCreate', function _callee2(interaction) {
           return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context2.t1.message)));
 
         case 40:
-          _context2.next = 80;
+          _context2.next = 79;
           break;
 
         case 42:
@@ -172,12 +158,12 @@ client.on('interactionCreate', function _callee2(interaction) {
           return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context2.t2.message)));
 
         case 59:
-          _context2.next = 80;
+          _context2.next = 79;
           break;
 
         case 61:
           if (!(commandName === 'console')) {
-            _context2.next = 80;
+            _context2.next = 79;
             break;
           }
 
@@ -188,38 +174,37 @@ client.on('interactionCreate', function _callee2(interaction) {
           command = interaction.options.getString('command');
           console.log("Executing command: ".concat(command));
           _context2.prev = 66;
-          encryptedCommand = encrypt(command);
-          _context2.next = 70;
+          _context2.next = 69;
           return regeneratorRuntime.awrap(axios.post("".concat(API_URL, "/execute"), {
-            command: encryptedCommand
+            command: command
           }, {
             headers: {
               Authorization: "Bearer ".concat(process.env.API_TOKEN)
             }
           }));
 
-        case 70:
+        case 69:
           response = _context2.sent;
-          _context2.next = 73;
+          _context2.next = 72;
           return regeneratorRuntime.awrap(interaction.editReply("```".concat(response.data.output, "```")));
 
-        case 73:
-          _context2.next = 80;
+        case 72:
+          _context2.next = 79;
           break;
 
-        case 75:
-          _context2.prev = 75;
+        case 74:
+          _context2.prev = 74;
           _context2.t3 = _context2["catch"](66);
           console.error("Error executing command: ".concat(_context2.t3.message));
-          _context2.next = 80;
+          _context2.next = 79;
           return regeneratorRuntime.awrap(interaction.editReply("Error: ".concat(_context2.t3.message)));
 
-        case 80:
+        case 79:
         case "end":
           return _context2.stop();
       }
     }
-  }, null, null, [[8, 16], [27, 35], [46, 54], [66, 75]]);
+  }, null, null, [[8, 16], [27, 35], [46, 54], [66, 74]]);
 });
 
 function getServerStatus() {

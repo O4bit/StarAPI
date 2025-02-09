@@ -1,6 +1,5 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder } = require('discord.js');
-const crypto = require('crypto');
 const axios = require('axios');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
@@ -8,18 +7,6 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const API_URL = process.env.API_URL;
-const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID;
-
-const algorithm = 'aes-256-cbc';
-const key = crypto.randomBytes(32);
-const iv = crypto.randomBytes(16);
-
-function encrypt(text) {
-    let cipher = crypto.createCipheriv(algorithm, Buffer.from(key), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
-}
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
@@ -68,8 +55,7 @@ client.on('interactionCreate', async interaction => {
         const command = interaction.options.getString('command');
         console.log(`Executing command: ${command}`);
         try {
-            const encryptedCommand = encrypt(command);
-            const response = await axios.post(`${API_URL}/execute`, { command: encryptedCommand }, {
+            const response = await axios.post(`${API_URL}/execute`, { command }, {
                 headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
             });
             await interaction.editReply(`\`\`\`${response.data.output}\`\`\``);

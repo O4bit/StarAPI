@@ -6,8 +6,6 @@ var express = require('express');
 
 var bodyParser = require('body-parser');
 
-var crypto = require('crypto');
-
 var helmet = require('helmet');
 
 var passport = require('passport');
@@ -19,8 +17,7 @@ var session = require('express-session');
 var axios = require('axios');
 
 var _require = require('child_process'),
-    exec = _require.exec; // Import exec
-
+    exec = _require.exec;
 
 var fs = require('fs');
 
@@ -179,19 +176,57 @@ var ensureBearerToken = function ensureBearerToken(req, res, next) {
   }, null, null, [[3, 10]]);
 };
 
-app.post('/verify', function _callee2(req, res) {
-  var token, result;
+app.post('/execute', ensureBearerToken, function _callee2(req, res) {
+  var command;
   return regeneratorRuntime.async(function _callee2$(_context3) {
     while (1) {
       switch (_context3.prev = _context3.next) {
         case 0:
+          command = req.body.command;
+
+          if (command) {
+            _context3.next = 3;
+            break;
+          }
+
+          return _context3.abrupt("return", res.status(400).send({
+            message: 'Command is required'
+          }));
+
+        case 3:
+          exec(command, function (error, stdout, stderr) {
+            if (error) {
+              return res.status(500).send({
+                message: 'Failed to execute command',
+                error: stderr
+              });
+            }
+
+            res.status(200).send({
+              output: stdout
+            });
+          });
+
+        case 4:
+        case "end":
+          return _context3.stop();
+      }
+    }
+  });
+});
+app.post('/verify', function _callee3(req, res) {
+  var token, result;
+  return regeneratorRuntime.async(function _callee3$(_context4) {
+    while (1) {
+      switch (_context4.prev = _context4.next) {
+        case 0:
           token = req.body.token;
-          _context3.prev = 1;
-          _context3.next = 4;
+          _context4.prev = 1;
+          _context4.next = 4;
           return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens WHERE token = $1', [token]));
 
         case 4:
-          result = _context3.sent;
+          result = _context4.sent;
 
           if (result.rows.length > 0) {
             res.status(200).send({
@@ -204,103 +239,60 @@ app.post('/verify', function _callee2(req, res) {
             });
           }
 
-          _context3.next = 12;
+          _context4.next = 12;
           break;
 
         case 8:
-          _context3.prev = 8;
-          _context3.t0 = _context3["catch"](1);
-          console.error('Error verifying token:', _context3.t0);
+          _context4.prev = 8;
+          _context4.t0 = _context4["catch"](1);
+          console.error('Error verifying token:', _context4.t0);
           res.status(500).send({
             message: 'Verification failed',
-            error: _context3.t0
-          });
-
-        case 12:
-        case "end":
-          return _context3.stop();
-      }
-    }
-  }, null, null, [[1, 8]]);
-});
-app.get('/tokens', ensureBearerToken, function _callee3(req, res) {
-  var result;
-  return regeneratorRuntime.async(function _callee3$(_context4) {
-    while (1) {
-      switch (_context4.prev = _context4.next) {
-        case 0:
-          _context4.prev = 0;
-          _context4.next = 3;
-          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens'));
-
-        case 3:
-          result = _context4.sent;
-          res.status(200).send({
-            tokens: result.rows
-          });
-          _context4.next = 11;
-          break;
-
-        case 7:
-          _context4.prev = 7;
-          _context4.t0 = _context4["catch"](0);
-          console.error('Error fetching tokens:', _context4.t0);
-          res.status(500).send({
-            message: 'Failed to fetch tokens',
             error: _context4.t0
           });
 
-        case 11:
+        case 12:
         case "end":
           return _context4.stop();
       }
     }
-  }, null, null, [[0, 7]]);
+  }, null, null, [[1, 8]]);
 });
-app["delete"]('/tokens/:id', ensureBearerToken, function _callee4(req, res) {
-  var id, result;
+app.get('/tokens', ensureBearerToken, function _callee4(req, res) {
+  var result;
   return regeneratorRuntime.async(function _callee4$(_context5) {
     while (1) {
       switch (_context5.prev = _context5.next) {
         case 0:
-          id = req.params.id;
-          _context5.prev = 1;
-          _context5.next = 4;
-          return regeneratorRuntime.awrap(pool.query('DELETE FROM tokens WHERE id = $1', [id]));
+          _context5.prev = 0;
+          _context5.next = 3;
+          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens'));
 
-        case 4:
+        case 3:
           result = _context5.sent;
-
-          if (result.rowCount > 0) {
-            res.status(200).send({
-              message: 'Token deleted successfully'
-            });
-          } else {
-            res.status(404).send({
-              message: 'Token not found'
-            });
-          }
-
-          _context5.next = 12;
+          res.status(200).send({
+            tokens: result.rows
+          });
+          _context5.next = 11;
           break;
 
-        case 8:
-          _context5.prev = 8;
-          _context5.t0 = _context5["catch"](1);
-          console.error('Error deleting token:', _context5.t0);
+        case 7:
+          _context5.prev = 7;
+          _context5.t0 = _context5["catch"](0);
+          console.error('Error fetching tokens:', _context5.t0);
           res.status(500).send({
-            message: 'Failed to delete token',
+            message: 'Failed to fetch tokens',
             error: _context5.t0
           });
 
-        case 12:
+        case 11:
         case "end":
           return _context5.stop();
       }
     }
-  }, null, null, [[1, 8]]);
+  }, null, null, [[0, 7]]);
 });
-app.patch('/tokens/:id/lock', ensureBearerToken, function _callee5(req, res) {
+app["delete"]('/tokens/:id', ensureBearerToken, function _callee5(req, res) {
   var id, result;
   return regeneratorRuntime.async(function _callee5$(_context6) {
     while (1) {
@@ -309,14 +301,14 @@ app.patch('/tokens/:id/lock', ensureBearerToken, function _callee5(req, res) {
           id = req.params.id;
           _context6.prev = 1;
           _context6.next = 4;
-          return regeneratorRuntime.awrap(pool.query('UPDATE tokens SET locked = true WHERE id = $1', [id]));
+          return regeneratorRuntime.awrap(pool.query('DELETE FROM tokens WHERE id = $1', [id]));
 
         case 4:
           result = _context6.sent;
 
           if (result.rowCount > 0) {
             res.status(200).send({
-              message: 'Token locked successfully'
+              message: 'Token deleted successfully'
             });
           } else {
             res.status(404).send({
@@ -330,15 +322,58 @@ app.patch('/tokens/:id/lock', ensureBearerToken, function _callee5(req, res) {
         case 8:
           _context6.prev = 8;
           _context6.t0 = _context6["catch"](1);
-          console.error('Error locking token:', _context6.t0);
+          console.error('Error deleting token:', _context6.t0);
           res.status(500).send({
-            message: 'Failed to lock token',
+            message: 'Failed to delete token',
             error: _context6.t0
           });
 
         case 12:
         case "end":
           return _context6.stop();
+      }
+    }
+  }, null, null, [[1, 8]]);
+});
+app.patch('/tokens/:id/lock', ensureBearerToken, function _callee6(req, res) {
+  var id, result;
+  return regeneratorRuntime.async(function _callee6$(_context7) {
+    while (1) {
+      switch (_context7.prev = _context7.next) {
+        case 0:
+          id = req.params.id;
+          _context7.prev = 1;
+          _context7.next = 4;
+          return regeneratorRuntime.awrap(pool.query('UPDATE tokens SET locked = true WHERE id = $1', [id]));
+
+        case 4:
+          result = _context7.sent;
+
+          if (result.rowCount > 0) {
+            res.status(200).send({
+              message: 'Token locked successfully'
+            });
+          } else {
+            res.status(404).send({
+              message: 'Token not found'
+            });
+          }
+
+          _context7.next = 12;
+          break;
+
+        case 8:
+          _context7.prev = 8;
+          _context7.t0 = _context7["catch"](1);
+          console.error('Error locking token:', _context7.t0);
+          res.status(500).send({
+            message: 'Failed to lock token',
+            error: _context7.t0
+          });
+
+        case 12:
+        case "end":
+          return _context7.stop();
       }
     }
   }, null, null, [[1, 8]]);
@@ -366,14 +401,14 @@ app.get('/health', ensureBearerToken, function (req, res) {
     });
   });
 });
-app.get('/systeminfo', ensureBearerToken, function _callee6(req, res) {
+app.get('/systeminfo', ensureBearerToken, function _callee7(req, res) {
   var systemInfo;
-  return regeneratorRuntime.async(function _callee6$(_context7) {
+  return regeneratorRuntime.async(function _callee7$(_context8) {
     while (1) {
-      switch (_context7.prev = _context7.next) {
+      switch (_context8.prev = _context8.next) {
         case 0:
-          _context7.prev = 0;
-          _context7.next = 3;
+          _context8.prev = 0;
+          _context8.next = 3;
           return regeneratorRuntime.awrap(si.get({
             cpu: 'manufacturer, brand, speed, cores',
             mem: 'total, free',
@@ -383,22 +418,22 @@ app.get('/systeminfo', ensureBearerToken, function _callee6(req, res) {
           }));
 
         case 3:
-          systemInfo = _context7.sent;
+          systemInfo = _context8.sent;
           res.status(200).send(systemInfo);
-          _context7.next = 10;
+          _context8.next = 10;
           break;
 
         case 7:
-          _context7.prev = 7;
-          _context7.t0 = _context7["catch"](0);
+          _context8.prev = 7;
+          _context8.t0 = _context8["catch"](0);
           res.status(500).send({
             message: 'Failed to retrieve system information',
-            error: _context7.t0
+            error: _context8.t0
           });
 
         case 10:
         case "end":
-          return _context7.stop();
+          return _context8.stop();
       }
     }
   }, null, null, [[0, 7]]);
@@ -417,58 +452,58 @@ app.get('/neofetch', ensureBearerToken, function (req, res) {
     });
   });
 });
-app.get('/websiteStatus', ensureBearerToken, function _callee7(req, res) {
+app.get('/websiteStatus', ensureBearerToken, function _callee8(req, res) {
   var url, response;
-  return regeneratorRuntime.async(function _callee7$(_context8) {
+  return regeneratorRuntime.async(function _callee8$(_context9) {
     while (1) {
-      switch (_context8.prev = _context8.next) {
+      switch (_context9.prev = _context9.next) {
         case 0:
           url = req.query.url;
 
           if (url) {
-            _context8.next = 3;
+            _context9.next = 3;
             break;
           }
 
-          return _context8.abrupt("return", res.status(400).send({
+          return _context9.abrupt("return", res.status(400).send({
             message: 'URL query parameter is required'
           }));
 
         case 3:
-          _context8.prev = 3;
-          _context8.next = 6;
+          _context9.prev = 3;
+          _context9.next = 6;
           return regeneratorRuntime.awrap(axios.get(url));
 
         case 6:
-          response = _context8.sent;
+          response = _context9.sent;
           res.status(200).send({
             status: 'up',
             statusCode: response.status
           });
-          _context8.next = 13;
+          _context9.next = 13;
           break;
 
         case 10:
-          _context8.prev = 10;
-          _context8.t0 = _context8["catch"](3);
+          _context9.prev = 10;
+          _context9.t0 = _context9["catch"](3);
           res.status(200).send({
             status: 'down',
-            statusCode: _context8.t0.response ? _context8.t0.response.status : 'unknown'
+            statusCode: _context9.t0.response ? _context9.t0.response.status : 'unknown'
           });
 
         case 13:
         case "end":
-          return _context8.stop();
+          return _context9.stop();
       }
     }
   }, null, null, [[3, 10]]);
 });
-app.get('/logs', ensureBearerToken, function _callee8(req, res) {
+app.get('/logs', ensureBearerToken, function _callee9(req, res) {
   var logFiles, oneHourAgo, severityLevels, logs, _i, _logFiles, logFile, data, filteredLogs, pastebinResponse;
 
-  return regeneratorRuntime.async(function _callee8$(_context9) {
+  return regeneratorRuntime.async(function _callee9$(_context10) {
     while (1) {
-      switch (_context9.prev = _context9.next) {
+      switch (_context10.prev = _context10.next) {
         case 0:
           logFiles = ['/var/log/syslog', '/var/log/syslog.1']; // Add more log files if needed
 
@@ -498,19 +533,19 @@ app.get('/logs', ensureBearerToken, function _callee8(req, res) {
           }
 
           if (!(logs.length === 0)) {
-            _context9.next = 8;
+            _context10.next = 8;
             break;
           }
 
           console.log('No relevant logs found for the past hour');
-          return _context9.abrupt("return", res.status(400).send({
+          return _context10.abrupt("return", res.status(400).send({
             message: 'No relevant logs found for the past hour'
           }));
 
         case 8:
           console.log('Logs to be sent to Pastebin:', logs);
-          _context9.prev = 9;
-          _context9.next = 12;
+          _context10.prev = 9;
+          _context10.next = 12;
           return regeneratorRuntime.awrap(pastebin.createPaste({
             text: logs,
             title: 'Server Logs',
@@ -521,26 +556,26 @@ app.get('/logs', ensureBearerToken, function _callee8(req, res) {
           }));
 
         case 12:
-          pastebinResponse = _context9.sent;
+          pastebinResponse = _context10.sent;
           console.log('Pastebin URL:', pastebinResponse);
           res.status(200).send({
             url: pastebinResponse
           });
-          _context9.next = 21;
+          _context10.next = 21;
           break;
 
         case 17:
-          _context9.prev = 17;
-          _context9.t0 = _context9["catch"](9);
-          console.error('Failed to create Pastebin:', _context9.t0);
+          _context10.prev = 17;
+          _context10.t0 = _context10["catch"](9);
+          console.error('Failed to create Pastebin:', _context10.t0);
           res.status(500).send({
             message: 'Failed to create Pastebin',
-            error: _context9.t0
+            error: _context10.t0
           });
 
         case 21:
         case "end":
-          return _context9.stop();
+          return _context10.stop();
       }
     }
   }, null, null, [[9, 17]]);
