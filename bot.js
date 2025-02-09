@@ -1,6 +1,6 @@
 require('dotenv').config();
-const { exec } = require('child_process'); // Import exec
-const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder } = require('discord.js');
+const crypto = require('crypto');
 const axios = require('axios');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
@@ -8,179 +8,77 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const API_URL = process.env.API_URL;
-const CHECK_INTERVAL = 60000; // Check every 60 seconds
 const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID;
+
+const algorithm = 'aes-256-cbc';
+const key = crypto.randomBytes(32);
+const iv = crypto.randomBytes(16);
+
+function encrypt(text) {
+    let cipher = crypto.createCipheriv(algorithm, Buffer.from(key), iv);
+    let encrypted = cipher.update(text);
+    encrypted = Buffer.concat([encrypted, cipher.final()]);
+    return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
     await clearCommands();
     await registerCommands();
-    monitorServer();
 });
 
 client.on('interactionCreate', async interaction => {
     console.log(`Received interaction: ${interaction.commandName}`);
-    if (!interaction.isCommand() && !interaction.isButton()) return;
+    if (!interaction.isCommand()) return;
 
     const { commandName } = interaction;
 
-    if (interaction.isCommand()) {
-        if (commandName === 'verify') {
-            await interaction.deferReply();
-            const token = interaction.options.getString('token');
-            console.log(`Verifying token: ${token}`);
-            try {
-                const response = await verifyToken(token);
-                if (response.verified) {
-                    const guild = client.guilds.cache.get(interaction.guildId);
-                    const member = await guild.members.fetch(interaction.user.id);
-                    const role = guild.roles.cache.get(VERIFIED_ROLE_ID);
-                    if (role) {
-                        await member.roles.add(role);
-                        await interaction.editReply('You have been verified and given access.');
-                    } else {
-                        await interaction.editReply('Role not found.');
-                    }
-                } else {
-                    await interaction.editReply('Invalid token. Verification failed.');
-                }
-            } catch (error) {
-                console.error(`Error verifying token: ${error.message}`);
-                await interaction.editReply(`Error: ${error.message}`);
-            }
-        } else if (commandName === 'neofetch') {
-            await interaction.deferReply();
-            console.log('Running neofetch command');
-            try {
-                const response = await axios.get(`${API_URL}/neofetch`, {
-                    headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
-                });
-                const embed = new EmbedBuilder()
-                    .setColor('#0099ff')
-                    .setTitle('Neofetch')
-                    .setDescription(`\`\`\`${response.data.output}\`\`\``)
-                    .setTimestamp()
-                    .setFooter({ text: 'Neofetch Output' });
-
-                await interaction.editReply({ embeds: [embed] });
-            } catch (error) {
-                console.error(`Error running neofetch: ${error.message}`);
-                await interaction.editReply(`Error: ${error.message}`);
-            }
-        } else if (commandName === 'tokens') {
-            await interaction.deferReply();
-            console.log('Fetching tokens');
-            try {
-                const response = await axios.get(`${API_URL}/tokens`, {
-                    headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
-                });
-                const tokens = response.data.tokens;
-
-                const embed = new EmbedBuilder()
-                    .setColor('#0099ff')
-                    .setTitle('Token Management')
-                    .setDescription('List of tokens with options to delete or lock.');
-
-                const rows = tokens.map(token => {
-                    return new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`delete_${token.id}`)
-                            .setLabel('Delete')
-                            .setStyle(ButtonStyle.Danger),
-                        new ButtonBuilder()
-                            .setCustomId(`lock_${token.id}`)
-                            .setLabel('Lock')
-                            .setStyle(ButtonStyle.Secondary)
-                    );
-                });
-
-                await interaction.editReply({ embeds: [embed], components: rows });
-            } catch (error) {
-                console.error(`Error fetching tokens: ${error.message}`);
-                await interaction.editReply(`Error: ${error.message}`);
-            }
-        } else if (commandName === 'status') {
-            await interaction.deferReply();
-            console.log('Fetching server status');
-            try {
-                const status = await getServerStatus();
-                await interaction.editReply({ embeds: [status] });
-            } catch (error) {
-                console.error(`Error fetching server status: ${error.message}`);
-                await interaction.editReply(`Error: ${error.message}`);
-            }
-        } else if (commandName === 'reboot') {
-            await interaction.deferReply();
-            console.log('Rebooting server');
-            try {
-                const message = await rebootServer();
-                await interaction.editReply(message);
-            } catch (error) {
-                console.error(`Error rebooting server: ${error.message}`);
-                await interaction.editReply(`Error: ${error.message}`);
-            }
-        } else if (commandName === 'logs') {
-            await interaction.deferReply();
-            console.log('Fetching server logs');
-            try {
-                const logsUrl = await getServerLogs();
-                await interaction.editReply(`Logs URL: ${logsUrl}`);
-            } catch (error) {
-                console.error(`Error fetching server logs: ${error.message}`);
-                await interaction.editReply(`Error: ${error.message}`);
-            }
-        } else if (commandName === 'console') {
-            await interaction.deferReply();
-            const command = interaction.options.getString('command');
-            console.log(`Executing command: ${command}`);
-            try {
-                const output = await executeCommand(command);
-                await sendLongMessage(interaction, `\`\`\`${output}\`\`\``);
-            } catch (error) {
-                console.error(`Error executing command: ${error.message}`);
-                await interaction.editReply(`Error: ${error.message}`);
-            }
+    if (commandName === 'status') {
+        await interaction.deferReply();
+        console.log('Fetching server status');
+        try {
+            const status = await getServerStatus();
+            await interaction.editReply({ embeds: [status] });
+        } catch (error) {
+            console.error(`Error fetching server status: ${error.message}`);
+            await interaction.editReply(`Error: ${error.message}`);
         }
-    } else if (interaction.isButton()) {
-        const [action, tokenId] = interaction.customId.split('_');
-        console.log(`Button action: ${action}, tokenId: ${tokenId}`);
-
-        if (action === 'delete') {
-            try {
-                await axios.delete(`${API_URL}/tokens/${tokenId}`, {
-                    headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
-                });
-                await interaction.reply(`Token ${tokenId} deleted successfully.`);
-            } catch (error) {
-                console.error(`Error deleting token: ${error.message}`);
-                await interaction.reply(`Error deleting token: ${error.message}`);
-            }
-        } else if (action === 'lock') {
-            try {
-                await axios.patch(`${API_URL}/tokens/${tokenId}/lock`, {}, {
-                    headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
-                });
-                await interaction.reply(`Token ${tokenId} locked successfully.`);
-            } catch (error) {
-                console.error(`Error locking token: ${error.message}`);
-                await interaction.reply(`Error locking token: ${error.message}`);
-            }
+    } else if (commandName === 'reboot') {
+        await interaction.deferReply();
+        console.log('Rebooting server');
+        try {
+            const message = await rebootServer();
+            await interaction.editReply(message);
+        } catch (error) {
+            console.error(`Error rebooting server: ${error.message}`);
+            await interaction.editReply(`Error: ${error.message}`);
+        }
+    } else if (commandName === 'logs') {
+        await interaction.deferReply();
+        console.log('Fetching server logs');
+        try {
+            const logsUrl = await getServerLogs();
+            await interaction.editReply(`Logs URL: ${logsUrl}`);
+        } catch (error) {
+            console.error(`Error fetching server logs: ${error.message}`);
+            await interaction.editReply(`Error: ${error.message}`);
+        }
+    } else if (commandName === 'console') {
+        await interaction.deferReply();
+        const command = interaction.options.getString('command');
+        console.log(`Executing command: ${command}`);
+        try {
+            const encryptedCommand = encrypt(command);
+            const response = await axios.post(`${API_URL}/execute`, { command: encryptedCommand }, {
+                headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
+            });
+            await interaction.editReply(`\`\`\`${response.data.output}\`\`\``);
+        } catch (error) {
+            console.error(`Error executing command: ${error.message}`);
+            await interaction.editReply(`Error: ${error.message}`);
         }
     }
 });
-
-async function monitorServer() {
-    setInterval(async () => {
-        console.log('Checking server status');
-        const status = await getServerStatus();
-        if (status.description && status.description.includes('down')) {
-            const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
-            if (channel) {
-                channel.send({ embeds: [status] });
-            }
-        }
-    }, CHECK_INTERVAL);
-}
 
 async function getServerStatus() {
     try {
@@ -242,43 +140,6 @@ async function getServerLogs() {
     }
 }
 
-async function executeCommand(command) {
-    return new Promise((resolve, reject) => {
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error executing command: ${stderr}`);
-                reject(new Error(stderr));
-            } else {
-                resolve(stdout);
-            }
-        });
-    });
-}
-
-async function sendLongMessage(interaction, message) {
-    const maxLength = 2000;
-    if (message.length <= maxLength) {
-        await interaction.editReply(message);
-    } else {
-        const parts = message.match(new RegExp(`.{1,${maxLength}}`, 'g'));
-        for (const part of parts) {
-            await interaction.followUp(part);
-        }
-    }
-}
-
-async function verifyToken(token) {
-    try {
-        const response = await axios.post(`${API_URL}/verify`, { token }, {
-            headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
-        });
-        return response.data;
-    } catch (error) {
-        console.error(`Error verifying token: ${error.message}`);
-        throw new Error('Verification failed.');
-    }
-}
-
 async function clearCommands() {
     const rest = new REST({ version: '9' }).setToken(DISCORD_TOKEN);
 
@@ -326,26 +187,6 @@ async function registerCommands() {
                     required: true
                 }
             ]
-        },
-        {
-            name: 'verify',
-            description: 'Verify your account with a bearer token',
-            options: [
-                {
-                    name: 'token',
-                    type: 3, // STRING
-                    description: 'The bearer token',
-                    required: true
-                }
-            ]
-        },
-        {
-            name: 'neofetch',
-            description: 'Run neofetch and display the output'
-        },
-        {
-            name: 'tokens',
-            description: 'Manage tokens'
         }
     ];
 
