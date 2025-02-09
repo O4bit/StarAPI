@@ -11,6 +11,7 @@ const fs = require('fs');
 const PastebinAPI = require('pastebin-js');
 const si = require('systeminformation');
 const path = require('path');
+const crypto = require('crypto');s
 const { Pool } = require('pg');
 const app = express();
 const port = process.env.PORT || 3000;
