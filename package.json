@@ -1,28 +1,27 @@
 {
-    "name": "Simple-API",
+    "name": "pulsed-api-backend",
     "version": "1.0.0",
-    "description": "Simple application with Discord and Google OAuth integration.",
+    "description": "P.U.L.S.E.D API Backend",
     "main": "app.js",
     "scripts": {
-    "start": "node app.js",
-    "bot": "node bot.js",
-    "add-token": "node addToken.js"
+      "start": "node app.js"
     },
     "dependencies": {
-    "axios": "^0.21.1",
-    "body-parser": "^1.19.0",
-    "crypto": "^1.0.1",
-    "discord.js": "^13.3.1",
-    "dotenv": "^10.0.0",
-    "express": "^4.17.1",
-    "express-session": "^1.17.2",
-    "helmet": "^4.6.0",
-    "passport": "^0.4.1",
-    "passport-google-oauth20": "^2.0.0",
-    "pastebin-js": "^1.0.0",
-    "pg": "^8.7.1",
-    "systeminformation": "^5.9.9"
+      "axios": "^0.27.2",
+      "bcrypt": "^5.0.1",
+      "body-parser": "^1.19.2",
+      "crypto": "^1.0.1",
+      "express": "^4.18.1",
+      "express-rate-limit": "^6.3.0",
+      "helmet": "^5.1.1",
+      "jsonwebtoken": "^8.5.1",
+      "mariadb": "^2.5.5",
+      "morgan": "^1.10.0",
+      "pastebin-js": "^1.0.0",
+      "qrcode": "^1.5.0",
+      "speakeasy": "^2.0.0",
+      "systeminformation": "^5.11.11"
     },
     "author": "O4bit",
     "license": "MIT"
-}
+  }

@@ -3,3 +3,5 @@
 .env
 addToken.js
 dist/addToken.dev.js
+dist
+node_modules

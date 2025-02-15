@@ -1,134 +1,124 @@
-# P.U.L.S.E.D-API-backend
+```markdown
+# StarAPI
 
-This project is a backend API for the P.U.L.S.E.D application, which includes integration with Discord and Google OAuth for user verification. It also uses PostgreSQL for storing bearer tokens.
+This is my silly project called StarAPI. It provides various endpoints for system information, health checks, and more. The API uses secure authentication including JWT, 2FA, and IP whitelisting. oh also comes with a Discordbot :p
 
 ## Prerequisites
 
 - Node.js
-- PostgreSQL
-- Discord Bot Token
-- Google OAuth Credentials
-- Pastebin API Credentials
+- MariaDB
+- Basic linux knowladge
+- A brain
+- Git
 
-## Setup
+## Installation
 
-1. **Clone the repository:**
+1. Clone the repository:
 
-    ```sh
-    git clone https://github.com/O4bit/Simple-API.git
-    cd Simple-API
-    ```
+```sh
+git clone https://github.com/O4bit/StarAPI.git
+cd StarAPI
+```
 
-2. **Install dependencies:**
+2. Install the dependencies:
 
-    ```sh
-    npm install
-    ```
+```sh
+npm install
+```
 
-3. **Set up PostgreSQL:**
+3. Set up the MariaDB database:
 
-    - Install PostgreSQL and create a database and user.
-    - Create a table for storing tokens:
+```sql
+CREATE DATABASE pulsed_api_backend;
 
-        ```sql
-        CREATE TABLE tokens (
-            id SERIAL PRIMARY KEY,
-            token VARCHAR(255) UNIQUE NOT NULL
-        );
-        ```
+USE pulsed_api_backend;
 
-4. **Configure environment variables:**
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    secret VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL
+);
 
-    Create a `.env` file in the root directory and add the following variables:
+CREATE TABLE bot_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(255) UNIQUE NOT NULL
+);
 
-    ```properties
-    SESSION_SECRET="your_session_secret"
-    GOOGLE_CLIENT_ID="your_google_client_id"
-    GOOGLE_CLIENT_SECRET="your_google_client_secret"
-    CALLBACK_URL="your_google_callback_url"
-    DISCORD_TOKEN="your_discord_token"
-    API_URL="your_api_url"
-    API_TOKEN="your_api_token"
-    DISCORD_CHANNEL_ID="your_discord_channel_id"
-    DISCORD_WEBHOOK_URL="your_discord_webhook_url"
-    PASTEBIN_API_KEY="your_pastebin_api_key"
-    PASTEBIN_USER_NAME="your_pastebin_user_name"
-    PASTEBIN_USER_PASSWORD="your_pastebin_user_password"
-    CLIENT_ID="your_discord_client_id"
-    GUILD_ID="your_discord_guild_id"
-    PGUSER="your_postgresql_user"
-    PGHOST="your_postgresql_host"
-    PGDATABASE="your_postgresql_database"
-    PGPASSWORD="your_postgresql_password"
-    PGPORT="your_postgresql_port"
-    VERIFIED_ROLE_ID="your_verified_role_id"
-    ```
+CREATE TABLE audit_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
-5. **Add a token to the database:**
+4. Create a .env file with the following content:
 
-    Create a script [addToken.js](http://_vscodecontentref_/2) to add a token to the PostgreSQL database:
+```env
+DB_HOST=localhost
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_NAME=pulsed_api_backend
+JWT_SECRET=your_jwt_secret
+PASTEBIN_API_KEY=your_pastebin_api_key
+PASTEBIN_USER_NAME=your_pastebin_user_name
+PASTEBIN_USER_PASSWORD=your_pastebin_user_password
+```
 
-    ```javascript
-    require('dotenv').config();
-    const { Pool } = require('pg');
-
-    const pool = new Pool({
-        user: process.env.PGUSER,
-        host: process.env.PGHOST,
-        database: process.env.PGDATABASE,
-        password: process.env.PGPASSWORD,
-        port: process.env.PGPORT,
-    });
-
-    const token = 'your_bearer_token';
-
-    async function addToken() {
-        try {
-            await pool.query('INSERT INTO tokens (token) VALUES ($1) ON CONFLICT (token) DO NOTHING', [token]);
-            console.log('Token added successfully');
-        } catch (error) {
-            console.error('Error adding token:', error);
-        } finally {
-            pool.end();
-        }
-    }
-
-    addToken();
-    ```
-
-    Run the script to add the token:
-
-    ```sh
-    node addToken.js
-    ```
-
-## Running the Application
-
-1. **Start the backend server:**
-
-    ```sh
-    node app.js
-    ```
-
-2. **Start the Discord bot:**
-(recommended to have discordbot on a diffrent server like aws ec2)
-    ```sh
-    node bot.js
-    ```
+Replace the placeholders with your actual values.
 
 ## Usage
 
-- **Google OAuth Authentication:**
+1. Start the API server:
 
-    Users can authenticate using Google OAuth. The access token will be stored in the PostgreSQL database.
+```sh
+npm start
+```
 
-- **Discord Bot Commands:**
+2. Generate the QR code for 2FA setup:
 
-    - `/verify`: Verify your account with a bearer token.
-    - `/status`: Get the server status (requires verified role).
-    - `/reboot`: Reboot the server (requires verified role).
-    - `/logs`: Get the server logs (requires verified role).
-    - `/console`: Execute a command on the server (requires verified role).
+```sh
+node app.js /2fa
+```
+
+3. Generate the bot token:
+
+```sh
+node app.js /botoken
+```
+
+4. Add an IP address to the whitelist:
+
+```sh
+node app.js /whitelist <ip_address>
+```
+
+Replace `<ip_address>` with the actual IP address you want to whitelist.
+
+## Endpoints
+
+- `POST /register`: Register a new user.
+- `POST /login`: Log in and get a JWT token.
+- `POST /verify-2fa`: Verify the 2FA token.
+- `POST /execute`: Execute a command on the server (admin only).
+- `POST /verify`: Verify the bot token or 2FA token.
+- `GET /tokens`: Get all tokens (admin only).
+- `DELETE /tokens/:id`: Delete a token by ID (admin only).
+- `PATCH /tokens/:id/lock`: Lock a token by ID (admin only).
+- `GET /apihealth`: Get the API health status.
+- `GET /health`: Get the server health status.
+- `GET /systeminfo`: Get the system information.
+- `GET /neofetch`: Get the neofetch output.
+- `GET /websiteStatus`: Check the status of a website.
+- `GET /logs`: Get the server logs (admin only).
+
+## Security
+
+- **JWT**: JSON Web Tokens are used for session management.
+- **2FA**: Two-Factor Authentication is used for additional security.
+- **IP Whitelisting**: Only whitelisted IP addresses can access sensitive endpoints.
+- **Rate Limiting**: Prevents brute force attacks by limiting the number of requests per IP.
 
 ## License
 

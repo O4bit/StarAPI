@@ -1,12 +1,21 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
+const mariadb = require('mariadb');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const API_URL = process.env.API_URL;
+
+const pool = mariadb.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    connectionLimit: 5
+});
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
@@ -56,11 +65,25 @@ client.on('interactionCreate', async interaction => {
         console.log(`Executing command: ${command}`);
         try {
             const response = await axios.post(`${API_URL}/execute`, { command }, {
-                headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
+                headers: { 'x-bot-token': await getBotToken() }
             });
             await interaction.editReply(`\`\`\`${response.data.output}\`\`\``);
         } catch (error) {
             console.error(`Error executing command: ${error.message}`);
+            await interaction.editReply(`Error: ${error.message}`);
+        }
+    } else if (commandName === 'website') {
+        await interaction.deferReply();
+        const url = interaction.options.getString('url');
+        console.log(`Checking website status: ${url}`);
+        try {
+            const response = await axios.get(`${API_URL}/websiteStatus`, {
+                headers: { 'x-bot-token': await getBotToken() },
+                params: { url }
+            });
+            await interaction.editReply(`Website status: ${response.data.status}, Status code: ${response.data.statusCode}`);
+        } catch (error) {
+            console.error(`Error checking website status: ${error.message}`);
             await interaction.editReply(`Error: ${error.message}`);
         }
     }
@@ -69,11 +92,11 @@ client.on('interactionCreate', async interaction => {
 async function getServerStatus() {
     try {
         const response = await axios.get(`${API_URL}/systeminfo`, {
-            headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
+            headers: { 'x-bot-token': await getBotToken() }
         });
 
         const uptimeResponse = await axios.get(`${API_URL}/health`, {
-            headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
+            headers: { 'x-bot-token': await getBotToken() }
         });
 
         const embed = new EmbedBuilder()
@@ -105,7 +128,7 @@ async function getServerStatus() {
 async function rebootServer() {
     try {
         const response = await axios.post(`${API_URL}/reboot`, {}, {
-            headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
+            headers: { 'x-bot-token': await getBotToken() }
         });
         return response.data.message;
     } catch (error) {
@@ -117,12 +140,26 @@ async function rebootServer() {
 async function getServerLogs() {
     try {
         const response = await axios.get(`${API_URL}/logs`, {
-            headers: { Authorization: `Bearer ${process.env.API_TOKEN}` }
+            headers: { 'x-bot-token': await getBotToken() }
         });
         return response.data.url;
     } catch (error) {
         console.error(`Error getting server logs: ${error.message}`);
         return 'Failed to retrieve logs!';
+    }
+}
+
+async function getBotToken() {
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const rows = await conn.query("SELECT token FROM bot_tokens WHERE id = 1");
+        return rows[0].token;
+    } catch (err) {
+        console.error(`Error fetching bot token: ${err.message}`);
+        throw new Error('Failed to fetch bot token');
+    } finally {
+        if (conn) conn.release();
     }
 }
 
@@ -170,6 +207,18 @@ async function registerCommands() {
                     name: 'command',
                     type: 3, // STRING
                     description: 'The command to execute',
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'website',
+            description: 'Check the status of a website',
+            options: [
+                {
+                    name: 'url',
+                    type: 3, // STRING
+                    description: 'The URL of the website to check',
                     required: true
                 }
             ]

@@ -8,12 +8,6 @@ var bodyParser = require('body-parser');
 
 var helmet = require('helmet');
 
-var passport = require('passport');
-
-var GoogleStrategy = require('passport-google-oauth20').Strategy;
-
-var session = require('express-session');
-
 var axios = require('axios');
 
 var _require = require('child_process'),
@@ -29,8 +23,19 @@ var path = require('path');
 
 var crypto = require('crypto');
 
-var _require2 = require('pg'),
-    Pool = _require2.Pool;
+var mariadb = require('mariadb');
+
+var jwt = require('jsonwebtoken');
+
+var speakeasy = require('speakeasy');
+
+var bcrypt = require('bcrypt');
+
+var morgan = require('morgan');
+
+var qrcode = require('qrcode');
+
+var rateLimit = require('express-rate-limit');
 
 var app = express();
 var port = process.env.PORT || 3000;
@@ -39,159 +44,282 @@ var pastebin = new PastebinAPI({
   'api_user_name': process.env.PASTEBIN_USER_NAME,
   'api_user_password': process.env.PASTEBIN_USER_PASSWORD
 });
-var pool = new Pool({
-  user: process.env.PGUSER,
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE,
-  password: process.env.PGPASSWORD,
-  port: process.env.PGPORT
+var pool = mariadb.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  connectionLimit: 5
 });
 app.use(helmet());
 app.use(bodyParser.json());
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: true,
-  cookie: {
-    secure: false
+app.use(morgan('combined'));
+app.use('/dashboard', express["static"](path.join(__dirname, 'dashboard'))); // incase some guy from india tries brute force the passwd
+
+var limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100
+});
+app.use(limiter); // i don't think this is neccessary at all but i'll keep it here just in case
+
+var ipWhitelist = ['127.0.0.1'];
+
+var ensureIPWhitelist = function ensureIPWhitelist(req, res, next) {
+  var clientIp = req.ip;
+
+  if (ipWhitelist.includes(clientIp)) {
+    next();
+  } else {
+    res.status(403).send('Access denied. IP not whitelisted.');
   }
-}));
-app.use(passport.initialize());
-app.use(passport.session());
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.CALLBACK_URL,
-  scope: ['profile', 'email', 'https://www.googleapis.com/auth/user.phonenumbers.read']
-}, function _callee(accessToken, refreshToken, profile, done) {
-  return regeneratorRuntime.async(function _callee$(_context) {
+};
+
+var ensureJWT = function ensureJWT(req, res, next) {
+  var authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    var token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.JWT_SECRET, function (err, decoded) {
+      if (err) {
+        return res.status(401).send('Access denied. Invalid token.');
+      }
+
+      req.user = decoded;
+      next();
+    });
+  } else {
+    res.status(401).send('Access denied. Token required.');
+  }
+};
+
+var ensureBotToken = function ensureBotToken(req, res, next) {
+  var botToken, conn, rows;
+  return regeneratorRuntime.async(function ensureBotToken$(_context) {
     while (1) {
       switch (_context.prev = _context.next) {
         case 0:
-          profile.accessToken = accessToken;
-          _context.prev = 1;
+          botToken = req.headers['x-bot-token'];
+
+          if (!botToken) {
+            _context.next = 11;
+            break;
+          }
+
           _context.next = 4;
-          return regeneratorRuntime.awrap(pool.query('INSERT INTO tokens (token) VALUES ($1) ON CONFLICT (token) DO NOTHING', [accessToken]));
+          return regeneratorRuntime.awrap(pool.getConnection());
 
         case 4:
-          _context.next = 9;
-          break;
+          conn = _context.sent;
+          _context.next = 7;
+          return regeneratorRuntime.awrap(conn.query('SELECT * FROM bot_tokens WHERE token = ?', [botToken]));
 
-        case 6:
-          _context.prev = 6;
-          _context.t0 = _context["catch"](1);
-          console.error('Error storing token:', _context.t0);
+        case 7:
+          rows = _context.sent;
+          conn.release();
 
-        case 9:
-          return _context.abrupt("return", done(null, profile));
+          if (!(rows.length > 0)) {
+            _context.next = 11;
+            break;
+          }
 
-        case 10:
+          return _context.abrupt("return", next());
+
+        case 11:
+          ensureJWT(req, res, next);
+
+        case 12:
         case "end":
           return _context.stop();
       }
     }
-  }, null, null, [[1, 6]]);
-}));
-passport.serializeUser(function (user, done) {
-  done(null, user);
-});
-passport.deserializeUser(function (obj, done) {
-  done(null, obj);
-});
-app.use(function (req, res, next) {
-  req.anonymousId = crypto.randomBytes(16).toString('hex');
-  next();
-});
-app.use('/dashboard', express["static"](path.join(__dirname, 'dashboard')));
-var requestCount = 0;
-app.use(function (req, res, next) {
-  requestCount++;
-  next();
-});
-
-var ensureAuthenticated = function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) {
-    var phoneNumbers = req.user._json.phoneNumbers;
-
-    if (phoneNumbers && phoneNumbers.length > 0 && phoneNumbers[0].metadata.verified) {
-      return next();
-    } else {
-      return res.status(403).send('Access denied. Verified phone number required.');
-    }
-  } else {
-    res.status(401).send('Access denied. Please authenticate.');
-  }
+  });
 };
 
-var ensureBearerToken = function ensureBearerToken(req, res, next) {
-  var authHeader, token, result;
-  return regeneratorRuntime.async(function ensureBearerToken$(_context2) {
+var ensureRole = function ensureRole(role) {
+  return function (req, res, next) {
+    if (req.user && req.user.role === role) {
+      next();
+    } else {
+      res.status(403).send('Access denied. Insufficient permissions.');
+    }
+  };
+};
+
+var logAudit = function logAudit(message) {
+  var conn;
+  return regeneratorRuntime.async(function logAudit$(_context2) {
     while (1) {
       switch (_context2.prev = _context2.next) {
         case 0:
-          authHeader = req.headers.authorization;
+          _context2.next = 2;
+          return regeneratorRuntime.awrap(pool.getConnection());
 
-          if (!(authHeader && authHeader.startsWith('Bearer '))) {
-            _context2.next = 16;
-            break;
-          }
+        case 2:
+          conn = _context2.sent;
+          _context2.next = 5;
+          return regeneratorRuntime.awrap(conn.query('INSERT INTO audit_logs (message) VALUES (?)', [message]));
 
-          token = authHeader.split(' ')[1];
-          _context2.prev = 3;
-          _context2.next = 6;
-          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens WHERE token = $1', [token]));
+        case 5:
+          conn.release();
 
         case 6:
-          result = _context2.sent;
-
-          if (result.rows.length > 0) {
-            req.accessToken = token;
-            next();
-          } else {
-            res.status(401).send('Access denied. Invalid bearer token.');
-          }
-
-          _context2.next = 14;
-          break;
-
-        case 10:
-          _context2.prev = 10;
-          _context2.t0 = _context2["catch"](3);
-          console.error('Error verifying token:', _context2.t0);
-          res.status(500).send({
-            message: 'Verification failed',
-            error: _context2.t0
-          });
-
-        case 14:
-          _context2.next = 17;
-          break;
-
-        case 16:
-          res.status(401).send('Access denied. Bearer token required.');
-
-        case 17:
         case "end":
           return _context2.stop();
       }
     }
-  }, null, null, [[3, 10]]);
+  });
 };
 
-app.post('/execute', ensureBearerToken, function _callee2(req, res) {
-  var command;
-  return regeneratorRuntime.async(function _callee2$(_context3) {
+app.post('/register', function _callee(req, res) {
+  var _req$body, username, password, role, hashedPassword, secret, conn;
+
+  return regeneratorRuntime.async(function _callee$(_context3) {
     while (1) {
       switch (_context3.prev = _context3.next) {
+        case 0:
+          _req$body = req.body, username = _req$body.username, password = _req$body.password, role = _req$body.role;
+          _context3.next = 3;
+          return regeneratorRuntime.awrap(bcrypt.hash(password, 10));
+
+        case 3:
+          hashedPassword = _context3.sent;
+          secret = speakeasy.generateSecret({
+            length: 20
+          });
+          _context3.prev = 5;
+          _context3.next = 8;
+          return regeneratorRuntime.awrap(pool.getConnection());
+
+        case 8:
+          conn = _context3.sent;
+          _context3.next = 11;
+          return regeneratorRuntime.awrap(conn.query('INSERT INTO users (username, password, secret, role) VALUES (?, ?, ?, ?)', [username, hashedPassword, secret.base32, role]));
+
+        case 11:
+          conn.release();
+          res.status(201).send('User registered successfully');
+          _context3.next = 18;
+          break;
+
+        case 15:
+          _context3.prev = 15;
+          _context3.t0 = _context3["catch"](5);
+          res.status(500).send({
+            message: 'Registration failed',
+            error: _context3.t0
+          });
+
+        case 18:
+        case "end":
+          return _context3.stop();
+      }
+    }
+  }, null, null, [[5, 15]]);
+}); //TODO: Itergrate this with a dash board (i am too lazy to do it)
+
+app.post('/login', function _callee2(req, res) {
+  var _req$body2, username, password, conn, rows, user, passwordMatch, token;
+
+  return regeneratorRuntime.async(function _callee2$(_context4) {
+    while (1) {
+      switch (_context4.prev = _context4.next) {
+        case 0:
+          _req$body2 = req.body, username = _req$body2.username, password = _req$body2.password;
+          _context4.prev = 1;
+          _context4.next = 4;
+          return regeneratorRuntime.awrap(pool.getConnection());
+
+        case 4:
+          conn = _context4.sent;
+          _context4.next = 7;
+          return regeneratorRuntime.awrap(conn.query('SELECT * FROM users WHERE username = ?', [username]));
+
+        case 7:
+          rows = _context4.sent;
+          conn.release();
+
+          if (!(rows.length > 0)) {
+            _context4.next = 17;
+            break;
+          }
+
+          user = rows[0];
+          _context4.next = 13;
+          return regeneratorRuntime.awrap(bcrypt.compare(password, user.password));
+
+        case 13:
+          passwordMatch = _context4.sent;
+
+          if (passwordMatch) {
+            token = jwt.sign({
+              username: user.username,
+              role: user.role,
+              secret: user.secret
+            }, process.env.JWT_SECRET, {
+              expiresIn: '1h'
+            });
+            res.status(200).send({
+              token: token,
+              secret: user.secret
+            });
+          } else {
+            res.status(401).send('Invalid credentials');
+          }
+
+          _context4.next = 18;
+          break;
+
+        case 17:
+          res.status(401).send('Invalid credentials');
+
+        case 18:
+          _context4.next = 23;
+          break;
+
+        case 20:
+          _context4.prev = 20;
+          _context4.t0 = _context4["catch"](1);
+          res.status(500).send({
+            message: 'Login failed',
+            error: _context4.t0
+          });
+
+        case 23:
+        case "end":
+          return _context4.stop();
+      }
+    }
+  }, null, null, [[1, 20]]);
+});
+app.post('/verify-2fa', ensureJWT, function (req, res) {
+  var token = req.body.token;
+  var verified = speakeasy.totp.verify({
+    secret: req.user.secret,
+    encoding: 'base32',
+    token: token
+  });
+
+  if (verified) {
+    res.status(200).send('2FA verified');
+  } else {
+    res.status(401).send('Invalid 2FA token');
+  }
+}); //This has been the cause of weeks of pain trying to secure this one fucking endpoint
+
+app.post('/execute', ensureBotToken, ensureRole('admin'), function _callee3(req, res) {
+  var command;
+  return regeneratorRuntime.async(function _callee3$(_context5) {
+    while (1) {
+      switch (_context5.prev = _context5.next) {
         case 0:
           command = req.body.command;
 
           if (command) {
-            _context3.next = 3;
+            _context5.next = 3;
             break;
           }
 
-          return _context3.abrupt("return", res.status(400).send({
+          return _context5.abrupt("return", res.status(400).send({
             message: 'Command is required'
           }));
 
@@ -211,104 +339,126 @@ app.post('/execute', ensureBearerToken, function _callee2(req, res) {
 
         case 4:
         case "end":
-          return _context3.stop();
-      }
-    }
-  });
-});
-app.post('/verify', function _callee3(req, res) {
-  var token, result;
-  return regeneratorRuntime.async(function _callee3$(_context4) {
-    while (1) {
-      switch (_context4.prev = _context4.next) {
-        case 0:
-          token = req.body.token;
-          _context4.prev = 1;
-          _context4.next = 4;
-          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens WHERE token = $1', [token]));
-
-        case 4:
-          result = _context4.sent;
-
-          if (result.rows.length > 0) {
-            res.status(200).send({
-              verified: true
-            });
-          } else {
-            res.status(401).send({
-              verified: false,
-              message: 'Invalid token'
-            });
-          }
-
-          _context4.next = 12;
-          break;
-
-        case 8:
-          _context4.prev = 8;
-          _context4.t0 = _context4["catch"](1);
-          console.error('Error verifying token:', _context4.t0);
-          res.status(500).send({
-            message: 'Verification failed',
-            error: _context4.t0
-          });
-
-        case 12:
-        case "end":
-          return _context4.stop();
-      }
-    }
-  }, null, null, [[1, 8]]);
-});
-app.get('/tokens', ensureBearerToken, function _callee4(req, res) {
-  var result;
-  return regeneratorRuntime.async(function _callee4$(_context5) {
-    while (1) {
-      switch (_context5.prev = _context5.next) {
-        case 0:
-          _context5.prev = 0;
-          _context5.next = 3;
-          return regeneratorRuntime.awrap(pool.query('SELECT * FROM tokens'));
-
-        case 3:
-          result = _context5.sent;
-          res.status(200).send({
-            tokens: result.rows
-          });
-          _context5.next = 11;
-          break;
-
-        case 7:
-          _context5.prev = 7;
-          _context5.t0 = _context5["catch"](0);
-          console.error('Error fetching tokens:', _context5.t0);
-          res.status(500).send({
-            message: 'Failed to fetch tokens',
-            error: _context5.t0
-          });
-
-        case 11:
-        case "end":
           return _context5.stop();
       }
     }
-  }, null, null, [[0, 7]]);
-});
-app["delete"]('/tokens/:id', ensureBearerToken, function _callee5(req, res) {
-  var id, result;
-  return regeneratorRuntime.async(function _callee5$(_context6) {
+  });
+}); // if this some how, in some way gets breached i am going to quit programming js
+
+app.post('/verify', ensureBotToken, function _callee4(req, res) {
+  var token, botToken, conn, rows, verified;
+  return regeneratorRuntime.async(function _callee4$(_context6) {
     while (1) {
       switch (_context6.prev = _context6.next) {
         case 0:
+          token = req.body.token;
+          botToken = req.headers['x-bot-token'];
+
+          if (!botToken) {
+            _context6.next = 12;
+            break;
+          }
+
+          _context6.next = 5;
+          return regeneratorRuntime.awrap(pool.getConnection());
+
+        case 5:
+          conn = _context6.sent;
+          _context6.next = 8;
+          return regeneratorRuntime.awrap(conn.query('SELECT * FROM bot_tokens WHERE token = ?', [botToken]));
+
+        case 8:
+          rows = _context6.sent;
+          conn.release();
+
+          if (!(rows.length > 0)) {
+            _context6.next = 12;
+            break;
+          }
+
+          return _context6.abrupt("return", res.status(200).send('Bot token verified'));
+
+        case 12:
+          verified = speakeasy.totp.verify({
+            secret: req.user.secret,
+            encoding: 'base32',
+            token: token
+          });
+
+          if (verified) {
+            res.status(200).send('2FA verified');
+          } else {
+            res.status(401).send('Invalid 2FA token');
+          }
+
+        case 14:
+        case "end":
+          return _context6.stop();
+      }
+    }
+  });
+}); //TODO: Fix this fucking mess of a code
+
+app.get('/tokens', ensureJWT, ensureRole('admin'), function _callee5(req, res) {
+  var conn, rows;
+  return regeneratorRuntime.async(function _callee5$(_context7) {
+    while (1) {
+      switch (_context7.prev = _context7.next) {
+        case 0:
+          _context7.prev = 0;
+          _context7.next = 3;
+          return regeneratorRuntime.awrap(pool.getConnection());
+
+        case 3:
+          conn = _context7.sent;
+          _context7.next = 6;
+          return regeneratorRuntime.awrap(conn.query('SELECT * FROM tokens'));
+
+        case 6:
+          rows = _context7.sent;
+          conn.release();
+          res.status(200).send({
+            tokens: rows
+          });
+          _context7.next = 14;
+          break;
+
+        case 11:
+          _context7.prev = 11;
+          _context7.t0 = _context7["catch"](0);
+          res.status(500).send({
+            message: 'Failed to fetch tokens',
+            error: _context7.t0
+          });
+
+        case 14:
+        case "end":
+          return _context7.stop();
+      }
+    }
+  }, null, null, [[0, 11]]);
+});
+app["delete"]('/tokens/:id', ensureJWT, ensureRole('admin'), function _callee6(req, res) {
+  var id, conn, result;
+  return regeneratorRuntime.async(function _callee6$(_context8) {
+    while (1) {
+      switch (_context8.prev = _context8.next) {
+        case 0:
           id = req.params.id;
-          _context6.prev = 1;
-          _context6.next = 4;
-          return regeneratorRuntime.awrap(pool.query('DELETE FROM tokens WHERE id = $1', [id]));
+          _context8.prev = 1;
+          _context8.next = 4;
+          return regeneratorRuntime.awrap(pool.getConnection());
 
         case 4:
-          result = _context6.sent;
+          conn = _context8.sent;
+          _context8.next = 7;
+          return regeneratorRuntime.awrap(conn.query('DELETE FROM tokens WHERE id = ?', [id]));
 
-          if (result.rowCount > 0) {
+        case 7:
+          result = _context8.sent;
+          conn.release();
+
+          if (result.affectedRows > 0) {
             res.status(200).send({
               message: 'Token deleted successfully'
             });
@@ -318,40 +468,45 @@ app["delete"]('/tokens/:id', ensureBearerToken, function _callee5(req, res) {
             });
           }
 
-          _context6.next = 12;
+          _context8.next = 15;
           break;
 
-        case 8:
-          _context6.prev = 8;
-          _context6.t0 = _context6["catch"](1);
-          console.error('Error deleting token:', _context6.t0);
+        case 12:
+          _context8.prev = 12;
+          _context8.t0 = _context8["catch"](1);
           res.status(500).send({
             message: 'Failed to delete token',
-            error: _context6.t0
+            error: _context8.t0
           });
 
-        case 12:
+        case 15:
         case "end":
-          return _context6.stop();
+          return _context8.stop();
       }
     }
-  }, null, null, [[1, 8]]);
+  }, null, null, [[1, 12]]);
 });
-app.patch('/tokens/:id/lock', ensureBearerToken, function _callee6(req, res) {
-  var id, result;
-  return regeneratorRuntime.async(function _callee6$(_context7) {
+app.patch('/tokens/:id/lock', ensureJWT, ensureRole('admin'), function _callee7(req, res) {
+  var id, conn, result;
+  return regeneratorRuntime.async(function _callee7$(_context9) {
     while (1) {
-      switch (_context7.prev = _context7.next) {
+      switch (_context9.prev = _context9.next) {
         case 0:
           id = req.params.id;
-          _context7.prev = 1;
-          _context7.next = 4;
-          return regeneratorRuntime.awrap(pool.query('UPDATE tokens SET locked = true WHERE id = $1', [id]));
+          _context9.prev = 1;
+          _context9.next = 4;
+          return regeneratorRuntime.awrap(pool.getConnection());
 
         case 4:
-          result = _context7.sent;
+          conn = _context9.sent;
+          _context9.next = 7;
+          return regeneratorRuntime.awrap(conn.query('UPDATE tokens SET locked = true WHERE id = ?', [id]));
 
-          if (result.rowCount > 0) {
+        case 7:
+          result = _context9.sent;
+          conn.release();
+
+          if (result.affectedRows > 0) {
             res.status(200).send({
               message: 'Token locked successfully'
             });
@@ -361,26 +516,25 @@ app.patch('/tokens/:id/lock', ensureBearerToken, function _callee6(req, res) {
             });
           }
 
-          _context7.next = 12;
+          _context9.next = 15;
           break;
 
-        case 8:
-          _context7.prev = 8;
-          _context7.t0 = _context7["catch"](1);
-          console.error('Error locking token:', _context7.t0);
+        case 12:
+          _context9.prev = 12;
+          _context9.t0 = _context9["catch"](1);
           res.status(500).send({
             message: 'Failed to lock token',
-            error: _context7.t0
+            error: _context9.t0
           });
 
-        case 12:
+        case 15:
         case "end":
-          return _context7.stop();
+          return _context9.stop();
       }
     }
-  }, null, null, [[1, 8]]);
+  }, null, null, [[1, 12]]);
 });
-app.get('/apihealth', ensureBearerToken, function (req, res) {
+app.get('/apihealth', ensureBotToken, function (req, res) {
   var healthData = {
     uptime: process.uptime(),
     requestCount: requestCount,
@@ -388,7 +542,7 @@ app.get('/apihealth', ensureBearerToken, function (req, res) {
   };
   res.status(200).send(healthData);
 });
-app.get('/health', ensureBearerToken, function (req, res) {
+app.get('/health', ensureBotToken, function (req, res) {
   exec('uptime -p', function (error, stdout, stderr) {
     if (error) {
       return res.status(500).send({
@@ -403,14 +557,14 @@ app.get('/health', ensureBearerToken, function (req, res) {
     });
   });
 });
-app.get('/systeminfo', ensureBearerToken, function _callee7(req, res) {
+app.get('/systeminfo', ensureBotToken, function _callee8(req, res) {
   var systemInfo;
-  return regeneratorRuntime.async(function _callee7$(_context8) {
+  return regeneratorRuntime.async(function _callee8$(_context10) {
     while (1) {
-      switch (_context8.prev = _context8.next) {
+      switch (_context10.prev = _context10.next) {
         case 0:
-          _context8.prev = 0;
-          _context8.next = 3;
+          _context10.prev = 0;
+          _context10.next = 3;
           return regeneratorRuntime.awrap(si.get({
             cpu: 'manufacturer, brand, speed, cores',
             mem: 'total, free',
@@ -420,27 +574,27 @@ app.get('/systeminfo', ensureBearerToken, function _callee7(req, res) {
           }));
 
         case 3:
-          systemInfo = _context8.sent;
+          systemInfo = _context10.sent;
           res.status(200).send(systemInfo);
-          _context8.next = 10;
+          _context10.next = 10;
           break;
 
         case 7:
-          _context8.prev = 7;
-          _context8.t0 = _context8["catch"](0);
+          _context10.prev = 7;
+          _context10.t0 = _context10["catch"](0);
           res.status(500).send({
             message: 'Failed to retrieve system information',
-            error: _context8.t0
+            error: _context10.t0
           });
 
         case 10:
         case "end":
-          return _context8.stop();
+          return _context10.stop();
       }
     }
   }, null, null, [[0, 7]]);
 });
-app.get('/neofetch', ensureBearerToken, function (req, res) {
+app.get('/neofetch', ensureBotToken, function (req, res) {
   exec('neofetch --stdout', function (error, stdout, stderr) {
     if (error) {
       return res.status(500).send({
@@ -454,61 +608,60 @@ app.get('/neofetch', ensureBearerToken, function (req, res) {
     });
   });
 });
-app.get('/websiteStatus', ensureBearerToken, function _callee8(req, res) {
+app.get('/websiteStatus', ensureBotToken, function _callee9(req, res) {
   var url, response;
-  return regeneratorRuntime.async(function _callee8$(_context9) {
+  return regeneratorRuntime.async(function _callee9$(_context11) {
     while (1) {
-      switch (_context9.prev = _context9.next) {
+      switch (_context11.prev = _context11.next) {
         case 0:
           url = req.query.url;
 
           if (url) {
-            _context9.next = 3;
+            _context11.next = 3;
             break;
           }
 
-          return _context9.abrupt("return", res.status(400).send({
+          return _context11.abrupt("return", res.status(400).send({
             message: 'URL query parameter is required'
           }));
 
         case 3:
-          _context9.prev = 3;
-          _context9.next = 6;
+          _context11.prev = 3;
+          _context11.next = 6;
           return regeneratorRuntime.awrap(axios.get(url));
 
         case 6:
-          response = _context9.sent;
+          response = _context11.sent;
           res.status(200).send({
             status: 'up',
             statusCode: response.status
           });
-          _context9.next = 13;
+          _context11.next = 13;
           break;
 
         case 10:
-          _context9.prev = 10;
-          _context9.t0 = _context9["catch"](3);
+          _context11.prev = 10;
+          _context11.t0 = _context11["catch"](3);
           res.status(200).send({
             status: 'down',
-            statusCode: _context9.t0.response ? _context9.t0.response.status : 'unknown'
+            statusCode: _context11.t0.response ? _context11.t0.response.status : 'unknown'
           });
 
         case 13:
         case "end":
-          return _context9.stop();
+          return _context11.stop();
       }
     }
   }, null, null, [[3, 10]]);
 });
-app.get('/logs', ensureBearerToken, function _callee9(req, res) {
+app.get('/logs', ensureJWT, ensureRole('admin'), function _callee10(req, res) {
   var logFiles, oneHourAgo, severityLevels, logs, _i, _logFiles, logFile, data, filteredLogs, pastebinResponse;
 
-  return regeneratorRuntime.async(function _callee9$(_context10) {
+  return regeneratorRuntime.async(function _callee10$(_context12) {
     while (1) {
-      switch (_context10.prev = _context10.next) {
+      switch (_context12.prev = _context12.next) {
         case 0:
-          logFiles = ['/var/log/syslog', '/var/log/syslog.1']; // Add more log files if needed
-
+          logFiles = ['/var/log/syslog', '/var/log/syslog.1'];
           oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
           severityLevels = ['warning', 'error', 'critical'];
           logs = '';
@@ -519,7 +672,6 @@ app.get('/logs', ensureBearerToken, function _callee9(req, res) {
             try {
               data = fs.readFileSync(logFile, 'utf8');
               filteredLogs = data.split('\n').filter(function (line) {
-                // Adjust date parsing as needed
                 var logDateMatch = line.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
                 if (!logDateMatch) return false;
                 var logDate = new Date(logDateMatch[0]);
@@ -535,72 +687,97 @@ app.get('/logs', ensureBearerToken, function _callee9(req, res) {
           }
 
           if (!(logs.length === 0)) {
-            _context10.next = 8;
+            _context12.next = 7;
             break;
           }
 
-          console.log('No relevant logs found for the past hour');
-          return _context10.abrupt("return", res.status(400).send({
+          return _context12.abrupt("return", res.status(400).send({
             message: 'No relevant logs found for the past hour'
           }));
 
-        case 8:
-          console.log('Logs to be sent to Pastebin:', logs);
-          _context10.prev = 9;
-          _context10.next = 12;
+        case 7:
+          _context12.prev = 7;
+          _context12.next = 10;
           return regeneratorRuntime.awrap(pastebin.createPaste({
             text: logs,
             title: 'Server Logs',
             format: null,
             privacy: 2,
-            // Unlisted
             expiration: '1H'
           }));
 
-        case 12:
-          pastebinResponse = _context10.sent;
-          console.log('Pastebin URL:', pastebinResponse);
+        case 10:
+          pastebinResponse = _context12.sent;
           res.status(200).send({
             url: pastebinResponse
           });
-          _context10.next = 21;
+          _context12.next = 17;
           break;
 
-        case 17:
-          _context10.prev = 17;
-          _context10.t0 = _context10["catch"](9);
-          console.error('Failed to create Pastebin:', _context10.t0);
+        case 14:
+          _context12.prev = 14;
+          _context12.t0 = _context12["catch"](7);
           res.status(500).send({
             message: 'Failed to create Pastebin',
-            error: _context10.t0
+            error: _context12.t0
           });
 
-        case 21:
+        case 17:
         case "end":
-          return _context10.stop();
+          return _context12.stop();
       }
     }
-  }, null, null, [[9, 17]]);
-});
-app.get('/auth/google', passport.authenticate('google', {
-  scope: ['profile', 'email', 'https://www.googleapis.com/auth/user.phonenumbers.read']
-}));
-app.get('/auth/google/callback', passport.authenticate('google', {
-  failureRedirect: '/'
-}), function (req, res) {
-  res.redirect('/dashboard');
-});
-app.get('/dashboard', function (req, res) {
-  var accessToken = req.user.accessToken;
-  res.send("Access Token: ".concat(accessToken));
+  }, null, null, [[7, 14]]);
 });
 app.listen(port, function () {
   console.log("API listening at http://localhost:".concat(port));
 }).on('error', function (err) {
   if (err.code === 'EADDRINUSE') {
-    console.error("Port ".concat(port, " is already in use"));
     process.exit(1);
   } else {
     throw err;
   }
 });
+
+if (process.argv.includes('/2fa')) {
+  var secret = speakeasy.generateSecret({
+    length: 20
+  });
+  var otpauthUrl = speakeasy.otpauthURL({
+    secret: secret.ascii,
+    label: 'P.U.L.S.E.D-API',
+    issuer: 'P.U.L.S.E.D'
+  });
+  qrcode.toString(otpauthUrl, {
+    type: 'terminal'
+  }, function (err, url) {
+    if (err) {
+      console.error('Failed to generate QR code:', err);
+    } else {
+      console.log('Scan this QR code with your authenticator app:');
+      console.log(url);
+      console.log("Secret: ".concat(secret.base32));
+    }
+  });
+}
+
+if (process.argv.includes('/botoken')) {
+  var botToken = crypto.randomBytes(32).toString('hex');
+  console.log("Generated Bot Token: ".concat(botToken));
+  pool.query('INSERT INTO bot_tokens (token) VALUES (?)', [botToken]).then(function () {
+    return console.log('Bot token saved to database');
+  })["catch"](function (err) {
+    return console.error('Failed to save bot token to database:', err);
+  });
+}
+
+if (process.argv.includes('/whitelist')) {
+  var ip = process.argv[process.argv.indexOf('/whitelist') + 1];
+
+  if (ip) {
+    ipWhitelist.push(ip);
+    console.log("IP ".concat(ip, " added to whitelist"));
+  } else {
+    console.error('No IP address provided');
+  }
+}
