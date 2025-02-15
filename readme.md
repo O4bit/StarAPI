@@ -29,9 +29,9 @@ npm install
 3. Set up the MariaDB database:
 
 ```sql
-CREATE DATABASE pulsed_api_backend;
+CREATE DATABASE starapi;
 
-USE pulsed_api_backend;
+USE starapi;
 
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -59,7 +59,7 @@ CREATE TABLE audit_logs (
 DB_HOST=localhost
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
-DB_NAME=pulsed_api_backend
+DB_NAME=starapi
 JWT_SECRET=your_jwt_secret
 PASTEBIN_API_KEY=your_pastebin_api_key
 PASTEBIN_USER_NAME=your_pastebin_user_name
