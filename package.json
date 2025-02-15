@@ -1,7 +1,7 @@
 {
-    "name": "pulsed-api-backend",
+    "name": "starapi",
     "version": "1.0.0",
-    "description": "P.U.L.S.E.D API Backend",
+    "description": "StarAPI Backend",
     "main": "app.js",
     "scripts": {
       "start": "node app.js"
