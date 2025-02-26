@@ -1,7 +1,6 @@
-```markdown
 # StarAPI
 
-This is my silly project called StarAPI. It provides various endpoints for system information, health checks, and more. The API uses secure authentication including JWT, 2FA, and IP whitelisting. oh also comes with a Discordbot :p
+This is my silly JS (I'm gonna kms) project called StarAPI. It provides various endpoints for system information, health checks, and more. Also comes with a Discordbot :p
 
 ## Prerequisites
 
@@ -60,7 +59,6 @@ DB_HOST=localhost
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 DB_NAME=pulsed_api_backend
-JWT_SECRET=your_jwt_secret
 PASTEBIN_API_KEY=your_pastebin_api_key
 PASTEBIN_USER_NAME=your_pastebin_user_name
 PASTEBIN_USER_PASSWORD=your_pastebin_user_password
@@ -76,36 +74,10 @@ Replace the placeholders with your actual values.
 npm start
 ```
 
-2. Generate the QR code for 2FA setup:
-
-```sh
-node app.js /2fa
-```
-
-3. Generate the bot token:
-
-```sh
-node app.js /botoken
-```
-
-4. Add an IP address to the whitelist:
-
-```sh
-node app.js /whitelist <ip_address>
-```
-
-Replace `<ip_address>` with the actual IP address you want to whitelist.
-
 ## Endpoints
 
-- `POST /register`: Register a new user.
-- `POST /login`: Log in and get a JWT token.
-- `POST /verify-2fa`: Verify the 2FA token.
 - `POST /execute`: Execute a command on the server (admin only).
 - `POST /verify`: Verify the bot token or 2FA token.
-- `GET /tokens`: Get all tokens (admin only).
-- `DELETE /tokens/:id`: Delete a token by ID (admin only).
-- `PATCH /tokens/:id/lock`: Lock a token by ID (admin only).
 - `GET /apihealth`: Get the API health status.
 - `GET /health`: Get the server health status.
 - `GET /systeminfo`: Get the system information.
@@ -114,10 +86,7 @@ Replace `<ip_address>` with the actual IP address you want to whitelist.
 - `GET /logs`: Get the server logs (admin only).
 
 ## Security
-
-- **JWT**: JSON Web Tokens are used for session management.
-- **2FA**: Two-Factor Authentication is used for additional security.
-- **IP Whitelisting**: Only whitelisted IP addresses can access sensitive endpoints.
+ 
 - **Rate Limiting**: Prevents brute force attacks by limiting the number of requests per IP.
 
 ## License
