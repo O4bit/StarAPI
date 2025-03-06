@@ -1,27 +1,49 @@
 {
     "name": "starapi",
-    "version": "1.0.0",
-    "description": "StarAPI Backend",
+    "version": "7.8.4",
+    "description": "StarAPI some silly project tm",
     "main": "app.js",
     "scripts": {
-      "start": "node app.js"
+        "prestart": "node scripts/setup.js --check",
+        "start": "concurrently \"node app.js\" \"node bot.js\"",
+        "dev": "concurrently \"nodemon app.js\" \"nodemon bot.js\"",
+        "setup": "node scripts/setup.js",
+        "api": "node app.js",
+        "bot": "node bot.js",
+        "metrics": "node services/metrics-collector.js",
+        "dashboard": "cd dashboard && npm start",
+        "build-dashboard": "cd dashboard && npm run build",
+        "test": "jest"
     },
     "dependencies": {
-      "axios": "^0.27.2",
-      "bcrypt": "^5.0.1",
-      "body-parser": "^1.19.2",
-      "crypto": "^1.0.1",
-      "express": "^4.18.1",
-      "express-rate-limit": "^6.3.0",
-      "helmet": "^5.1.1",
-      "jsonwebtoken": "^8.5.1",
-      "mariadb": "^2.5.5",
-      "morgan": "^1.10.0",
-      "pastebin-js": "^1.0.0",
-      "qrcode": "^1.5.0",
-      "speakeasy": "^2.0.0",
-      "systeminformation": "^5.11.11"
+        "axios": "^0.27.2",
+        "bcrypt": "^5.1.1",
+        "body-parser": "^1.20.2",
+        "cors": "^2.8.5",
+        "crypto": "^1.0.1",
+        "discord.js": "^14.14.1",
+        "dotenv": "^16.4.7",
+        "ejs": "^3.1.9",
+        "express": "^4.18.2",
+        "express-rate-limit": "^7.1.5",
+        "helmet": "^7.1.0",
+        "jsonwebtoken": "^9.0.2",
+        "morgan": "^1.10.0",
+        "pg": "^8.13.3",
+        "qrcode": "^1.5.3",
+        "speakeasy": "^2.0.0",
+        "systeminformation": "^5.21.24"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.2"
     },
     "author": "O4bit",
-    "license": "MIT"
-  }
+    "license": "MIT",
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/O4bit/StarAPI.git"
+    }
+}

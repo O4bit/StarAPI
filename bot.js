@@ -1,244 +1,356 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder } = require('discord.js');
+const { 
+    Client, 
+    GatewayIntentBits, 
+    REST, 
+    Routes, 
+    EmbedBuilder,
+    SlashCommandBuilder,
+    PermissionFlagsBits
+} = require('discord.js');
 const axios = require('axios');
-const mariadb = require('mariadb');
+const { encrypt, verifyEncryptedToken } = require('./utils/encryption');
+const { logAudit } = require('./services/audit-logger');
+const db = require('./config/database');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
+const client = new Client({ 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages
+    ]
+});
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const API_URL = process.env.API_URL;
+const API_URL = process.env.API_URL || 'http://localhost:3000/api';
 
-const pool = mariadb.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    connectionLimit: 5
-});
+let BOT_API_TOKEN;
+
+const ADMIN_IDS = process.env.DISCORD_ADMIN_IDS ? 
+    process.env.DISCORD_ADMIN_IDS.split(',') : [];
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
-    await clearCommands();
-    await registerCommands();
+    
+    try {
+        BOT_API_TOKEN = await getBotApiToken();
+        
+        await registerCommands();
+        
+        await logAudit('system', 'bot-startup', {
+            botTag: client.user.tag,
+            timestamp: new Date()
+        });
+        
+        console.log('Bot fully initialized and ready');
+    } catch (error) {
+        console.error('Bot initialization error:', error);
+    }
 });
 
 client.on('interactionCreate', async interaction => {
-    console.log(`Received interaction: ${interaction.commandName}`);
     if (!interaction.isCommand()) return;
 
     const { commandName } = interaction;
+    const userId = interaction.user.id;
+    const isAdmin = ADMIN_IDS.includes(userId);
 
-    if (commandName === 'status') {
-        await interaction.deferReply();
-        console.log('Fetching server status');
-        try {
-            const status = await getServerStatus();
-            await interaction.editReply({ embeds: [status] });
-        } catch (error) {
-            console.error(`Error fetching server status: ${error.message}`);
-            await interaction.editReply(`Error: ${error.message}`);
-        }
-    } else if (commandName === 'reboot') {
-        await interaction.deferReply();
-        console.log('Rebooting server');
-        try {
-            const message = await rebootServer();
-            await interaction.editReply(message);
-        } catch (error) {
-            console.error(`Error rebooting server: ${error.message}`);
-            await interaction.editReply(`Error: ${error.message}`);
-        }
-    } else if (commandName === 'logs') {
-        await interaction.deferReply();
-        console.log('Fetching server logs');
-        try {
-            const logsUrl = await getServerLogs();
-            await interaction.editReply(`Logs URL: ${logsUrl}`);
-        } catch (error) {
-            console.error(`Error fetching server logs: ${error.message}`);
-            await interaction.editReply(`Error: ${error.message}`);
-        }
-    } else if (commandName === 'console') {
-        await interaction.deferReply();
-        const command = interaction.options.getString('command');
-        console.log(`Executing command: ${command}`);
-        try {
-            const response = await axios.post(`${API_URL}/execute`, { command }, {
-                headers: { 'x-bot-token': await getBotToken() }
+    await logAudit(userId, 'bot-command', {
+        command: commandName,
+        user: interaction.user.tag,
+        isAdmin
+    });
+
+    try {
+        if (['logs', 'reboot'].includes(commandName) && !isAdmin) {
+            return interaction.reply({
+                content: 'You do not have permission to use this command.',
+                ephemeral: true
             });
-            await interaction.editReply(`\`\`\`${response.data.output}\`\`\``);
-        } catch (error) {
-            console.error(`Error executing command: ${error.message}`);
-            await interaction.editReply(`Error: ${error.message}`);
         }
-    } else if (commandName === 'website') {
-        await interaction.deferReply();
-        const url = interaction.options.getString('url');
-        console.log(`Checking website status: ${url}`);
-        try {
-            const response = await axios.get(`${API_URL}/websiteStatus`, {
-                headers: { 'x-bot-token': await getBotToken() },
-                params: { url }
+
+        switch (commandName) {
+            case 'status':
+                await handleStatus(interaction);
+                break;
+            case 'metrics':
+                await handleMetrics(interaction);
+                break;
+            case 'logs':
+                await handleLogs(interaction);
+                break;
+            case 'reboot':
+                await handleReboot(interaction);
+                break;
+            default:
+                await interaction.reply({
+                    content: `Unknown command: ${commandName}`,
+                    ephemeral: true
+                });
+        }
+    } catch (error) {
+        console.error(`Error handling command ${commandName}:`, error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+                content: `An error occurred while processing your command`,
+                ephemeral: true
             });
-            await interaction.editReply(`Website status: ${response.data.status}, Status code: ${response.data.statusCode}`);
-        } catch (error) {
-            console.error(`Error checking website status: ${error.message}`);
-            await interaction.editReply(`Error: ${error.message}`);
+        } else {
+            await interaction.editReply({
+                content: `An error occurred while processing your command`
+            });
         }
+        
+        await logAudit(userId, 'bot-command-error', {
+            command: commandName,
+            error: error.message,
+            stack: error.stack
+        });
     }
 });
 
-async function getServerStatus() {
+async function handleStatus(interaction) {
+    await interaction.deferReply();
+    
     try {
-        const response = await axios.get(`${API_URL}/systeminfo`, {
-            headers: { 'x-bot-token': await getBotToken() }
+        const response = await axios.get(`${API_URL}/system/health`, {
+            headers: { 'Authorization': `Bearer ${BOT_API_TOKEN}` }
         });
-
-        const uptimeResponse = await axios.get(`${API_URL}/health`, {
-            headers: { 'x-bot-token': await getBotToken() }
-        });
-
+        
         const embed = new EmbedBuilder()
-            .setColor(0x0099ff)
-            .setTitle('Server Status')
+            .setColor(0x00FF00)
+            .setTitle('System Status')
             .addFields(
-                { name: 'CPU', value: `${response.data.cpu.manufacturer} ${response.data.cpu.brand} ${response.data.cpu.speed}GHz (${response.data.cpu.cores} cores)`, inline: true },
-                { name: 'RAM', value: `${(response.data.mem.total / 1073741824).toFixed(2)} GB total, ${(response.data.mem.free / 1073741824).toFixed(2)} GB free`, inline: true },
-                { name: 'OS', value: `${response.data.osInfo.platform} ${response.data.osInfo.distro} ${response.data.osInfo.release} (Kernel: ${response.data.osInfo.kernel})`, inline: true },
-                { name: 'IP Address', value: response.data.networkInterfaces[0].ip4, inline: true },
-                { name: 'CPU Load', value: `${response.data.currentLoad.currentLoad.toFixed(2)}%`, inline: true },
-                { name: 'Uptime', value: uptimeResponse.data.uptime, inline: true }
+                { name: 'Status', value: response.data.status, inline: true },
+                { name: 'Uptime', value: formatUptime(response.data.uptime), inline: true },
+                { name: 'Load Average', value: response.data.loadAverage.join(', '), inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: 'Server Status' });
-
-        return embed;
+            .setFooter({ text: 'StarAPI Status' });
+        
+        await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error(`Error getting server status: ${error.message}`);
-        return new EmbedBuilder()
-            .setColor(0xff0000)
-            .setTitle('Server Status')
-            .setDescription('Server is down!')
+        console.error('Status command error:', error);
+        await interaction.editReply('Failed to retrieve system status');
+        throw error;
+    }
+}
+
+async function handleMetrics(interaction) {
+    await interaction.deferReply();
+    
+    try {
+        const response = await axios.get(`${API_URL}/system/metrics`, {
+            headers: { 'Authorization': `Bearer ${BOT_API_TOKEN}` }
+        });
+        
+        const data = response.data;
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('System Metrics')
+            .addFields(
+                { name: 'CPU Usage', value: `${data.load.currentLoad.toFixed(2)}%`, inline: true },
+                { name: 'Memory Used', value: formatBytes(data.memory.used), inline: true },
+                { name: 'Memory Total', value: formatBytes(data.memory.total), inline: true },
+                { name: 'CPU Temp', value: data.temperature.main ? `${data.temperature.main}°C` : 'N/A', inline: true },
+                { name: 'Disk Usage', value: `${data.disk[0]?.use.toFixed(2)}%`, inline: true },
+                { name: 'Network RX/TX', value: `${formatBytes(data.network[0]?.rx_sec)}/s / ${formatBytes(data.network[0]?.tx_sec)}/s`, inline: true }
+            )
             .setTimestamp()
-            .setFooter({ text: 'Server Status' });
-    }
-}
-
-async function rebootServer() {
-    try {
-        const response = await axios.post(`${API_URL}/reboot`, {}, {
-            headers: { 'x-bot-token': await getBotToken() }
-        });
-        return response.data.message;
+            .setFooter({ text: 'StarAPI Metrics' });
+        
+        await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error(`Error rebooting server: ${error.message}`);
-        return 'Failed to reboot the server!';
+        console.error('Metrics command error:', error);
+        await interaction.editReply('Failed to retrieve system metrics');
+        throw error;
     }
 }
 
-async function getServerLogs() {
+async function handleLogs(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    
     try {
+        const severity = interaction.options.getString('severity') || 'error';
+        const hours = interaction.options.getInteger('hours') || 24;
+        
         const response = await axios.get(`${API_URL}/logs`, {
-            headers: { 'x-bot-token': await getBotToken() }
+            params: { severity, hours, limit: 10 },
+            headers: { 'Authorization': `Bearer ${BOT_API_TOKEN}` }
         });
-        return response.data.url;
-    } catch (error) {
-        console.error(`Error getting server logs: ${error.message}`);
-        return 'Failed to retrieve logs!';
-    }
-}
-
-async function getBotToken() {
-    let conn;
-    try {
-        conn = await pool.getConnection();
-        const rows = await conn.query("SELECT token FROM bot_tokens WHERE id = 1");
-        return rows[0].token;
-    } catch (err) {
-        console.error(`Error fetching bot token: ${err.message}`);
-        throw new Error('Failed to fetch bot token');
-    } finally {
-        if (conn) conn.release();
-    }
-}
-
-async function clearCommands() {
-    const rest = new REST({ version: '9' }).setToken(DISCORD_TOKEN);
-
-    try {
-        console.log('Started clearing application (/) commands.');
-
-        const commands = await rest.get(
-            Routes.applicationCommands(CLIENT_ID)
-        );
-
-        for (const command of commands) {
-            await rest.delete(
-                Routes.applicationCommand(CLIENT_ID, command.id)
-            );
+        
+        if (response.data.logs.length === 0) {
+            return interaction.editReply('No logs found for the specified criteria.');
         }
-
-        console.log('Successfully cleared application (/) commands.');
+        
+        const logs = response.data.logs.map(log => 
+            `[${new Date(log.timestamp).toISOString()}] ${log.severity.toUpperCase()}: ${log.message}`
+        );
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFFA500)
+            .setTitle(`System Logs (${severity}, last ${hours}h)`)
+            .setDescription(logs.join('\n\n').substring(0, 4000))
+            .setTimestamp()
+            .setFooter({ text: 'StarAPI Logs' });
+        
+        await interaction.editReply({ embeds: [embed] });
+        
+        await logAudit(interaction.user.id, 'logs-access', {
+            severity,
+            hours,
+            count: response.data.logs.length,
+            via: 'discord-bot'
+        });
     } catch (error) {
-        console.error(`Error clearing commands: ${error.message}`);
+        console.error('Logs command error:', error);
+        await interaction.editReply('Failed to retrieve logs');
+        throw error;
+    }
+}
+
+async function handleReboot(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    
+    try {
+        await logAudit(interaction.user.id, 'system-reboot-request', {
+            user: interaction.user.tag,
+            channel: interaction.channel.name,
+            guild: interaction.guild.name
+        });
+        
+        await interaction.editReply({
+            content: 'System reboot request submitted. The server will restart shortly.'
+        });
+        
+        await axios.post(`${API_URL}/system/commands`, 
+            { command: 'system-reboot' },
+            { headers: { 'Authorization': `Bearer ${BOT_API_TOKEN}` } }
+        );
+    } catch (error) {
+        console.error('Reboot command error:', error);
+        await interaction.editReply('Failed to reboot system');
+        throw error;
     }
 }
 
 async function registerCommands() {
-    const commands = [
-        {
-            name: 'status',
-            description: 'Get the server status'
-        },
-        {
-            name: 'reboot',
-            description: 'Reboot the server'
-        },
-        {
-            name: 'logs',
-            description: 'Get the server logs'
-        },
-        {
-            name: 'console',
-            description: 'Execute a command on the server',
-            options: [
-                {
-                    name: 'command',
-                    type: 3, // STRING
-                    description: 'The command to execute',
-                    required: true
-                }
-            ]
-        },
-        {
-            name: 'website',
-            description: 'Check the status of a website',
-            options: [
-                {
-                    name: 'url',
-                    type: 3, // STRING
-                    description: 'The URL of the website to check',
-                    required: true
-                }
-            ]
-        }
-    ];
-
-    const rest = new REST({ version: '9' }).setToken(DISCORD_TOKEN);
-
     try {
-        console.log('Started refreshing application (/) commands.');
-
+        console.log('Registering slash commands...');
+        
+        const commands = [
+            new SlashCommandBuilder()
+                .setName('status')
+                .setDescription('Get system status'),
+                
+            new SlashCommandBuilder()
+                .setName('metrics')
+                .setDescription('Get detailed system metrics'),
+                
+            new SlashCommandBuilder()
+                .setName('logs')
+                .setDescription('Get system logs (admin only)')
+                .addStringOption(option => 
+                    option.setName('severity')
+                        .setDescription('Log severity level')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Error', value: 'error' },
+                            { name: 'Warning', value: 'warning' },
+                            { name: 'Info', value: 'info' },
+                            { name: 'Debug', value: 'debug' }
+                        )
+                )
+                .addIntegerOption(option =>
+                    option.setName('hours')
+                        .setDescription('Hours to look back')
+                        .setRequired(false)
+                        .setMinValue(1)
+                        .setMaxValue(72)
+                ),
+                
+            new SlashCommandBuilder()
+                .setName('reboot')
+                .setDescription('Reboot the system (admin only)')
+        ];
+        
+        const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+        
         await rest.put(
-            Routes.applicationCommands(CLIENT_ID), // Register global commands
-            { body: commands }
+            Routes.applicationCommands(CLIENT_ID),
+            { body: commands.map(command => command.toJSON()) }
         );
-
-        console.log('Successfully reloaded application (/) commands.');
+        
+        console.log('Successfully registered application commands');
     } catch (error) {
-        console.error(`Error registering commands: ${error.message}`);
+        console.error('Error registering commands:', error);
+        throw error;
     }
+}
+
+async function getBotApiToken() {
+    try {
+        const result = await db.query(
+            'SELECT token FROM bot_tokens WHERE bot_id = $1 AND expires_at > NOW()',
+            ['discord_bot']
+        );
+        
+        if (result.rows.length > 0) {
+            return result.rows[0].token;
+        }
+        
+        console.log('Requesting new bot API token...');
+        const response = await axios.post(`${API_URL}/auth/bot-token`, {
+            bot_id: 'discord_bot',
+            secret: process.env.BOT_SECRET
+        });
+        
+        if (!response.data.token) {
+            throw new Error('Failed to obtain bot API token');
+        }
+        
+        await db.query(
+            'INSERT INTO bot_tokens (bot_id, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'7 days\') ' +
+            'ON CONFLICT (bot_id) DO UPDATE SET token = $2, expires_at = NOW() + INTERVAL \'7 days\'',
+            ['discord_bot', response.data.token]
+        );
+        
+        return response.data.token;
+    } catch (error) {
+        console.error('Error getting bot API token:', error);
+        throw error;
+    }
+}
+
+function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    seconds %= 86400;
+    
+    const hours = Math.floor(seconds / 3600);
+    seconds %= 3600;
+    
+    const minutes = Math.floor(seconds / 60);
+    seconds = Math.floor(seconds % 60);
+    
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+    
+    return parts.join(' ');
+}
+
+function formatBytes(bytes, decimals = 2) {
+    if (!bytes) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
 }
 
 client.login(DISCORD_TOKEN);
