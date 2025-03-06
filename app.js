@@ -31,6 +31,14 @@ app.use('/api/auth', authRoutes);
 
 require('./services/metrics-collector');
 
+const listEndpoints = require('express-list-endpoints');
+console.log('Registered API routes:', 
+  listEndpoints(app).map(r => `${r.methods.join(',')} ${r.path}`).join('\n')
+);
+app.get('/test', (req, res) => {
+    res.json({ status: 'API is working' });
+  });
+  
 app.listen(port, () => {
     console.log(`API listening at http://localhost:${port}`);
 }).on('error', (err) => {

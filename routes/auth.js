@@ -115,4 +115,37 @@ router.post('/users', authenticateToken, requireRole('admin'), async (req, res) 
     }
 });
 
+router.post('/bot-token', async (req, res) => {
+    try {
+        const { bot_id, secret } = req.body;
+        
+        if (!bot_id || !secret) {
+            return res.status(400).json({ error: 'Missing bot_id or secret' });
+        }
+        
+        // Verify bot credentials
+        if (bot_id !== 'discord_bot' || secret !== process.env.BOT_SECRET) {
+            // Log failed attempt
+            await logAudit('system', 'bot-token-failed', { bot_id });
+            return res.status(401).json({ error: 'Invalid bot credentials' });
+        }
+        
+        // Generate token
+        const token = jwt.sign(
+            { bot_id, role: 'bot' },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+        
+        // Log successful token generation
+        await logAudit('system', 'bot-token-generated', { bot_id });
+        
+        res.json({ token });
+    } catch (error) {
+        console.error('Error generating bot token:', error);
+        res.status(500).json({ error: 'Failed to generate token' });
+    }
+});
+
+module.exports = router;
 module.exports = router;

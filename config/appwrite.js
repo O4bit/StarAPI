@@ -1,80 +1,114 @@
-const { Client, Account, Databases, Storage } = require('appwrite');
+const { Client, Databases, Query } = require('node-appwrite');
 
-const client = new Client()
-    .setEndpoint(process.env.APPWRITE_ENDPOINT)
-    .setProject(process.env.APPWRITE_PROJECT_ID)
-    .setKey(process.env.APPWRITE_API_KEY);
+// Initialize Appwrite client
+const client = new Client();
+
+client
+    .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
+    .setProject(process.env.APPWRITE_PROJECT_ID || '')
+    .setKey(process.env.APPWRITE_API_KEY || '');
 
 const databases = new Databases(client);
 
-const METRICS_DATABASE_ID = process.env.METRICS_DATABASE_ID;
-const LOGS_COLLECTION_ID = process.env.LOGS_COLLECTION_ID;
-const METRICS_COLLECTION_ID = process.env.METRICS_COLLECTION_ID;
-
-const storeMetrics = async (metrics) => {
-    try {
-        return await databases.createDocument(
-            METRICS_DATABASE_ID,
-            METRICS_COLLECTION_ID,
-            'unique()',
-            {
-                timestamp: new Date().toISOString(),
-                cpu: metrics.cpu,
-                memory: metrics.memory,
-                disk: metrics.disk,
-                temperature: metrics.temperature,
-                load: metrics.load
-            }
-        );
-    } catch (error) {
-        console.error('Failed to store metrics in Appwrite:', error);
-        throw error;
-    }
-};
-
-const storeLog = async (level, message, data = {}) => {
-    try {
-        return await databases.createDocument(
-            METRICS_DATABASE_ID,
-            LOGS_COLLECTION_ID,
-            'unique()',
-            {
-                timestamp: new Date().toISOString(),
-                level,
-                message,
-                data: JSON.stringify(data)
-            }
-        );
-    } catch (error) {
-        console.error('Failed to store log in Appwrite:', error);
-        throw error;
-    }
-};
-
+// Function to get recent metrics
 const getRecentMetrics = async (hours = 24) => {
     try {
-        const hoursAgo = new Date();
-        hoursAgo.setHours(hoursAgo.getHours() - hours);
+        const timestamp = new Date();
+        timestamp.setHours(timestamp.getHours() - hours);
         
-        return await databases.listDocuments(
-            METRICS_DATABASE_ID,
-            METRICS_COLLECTION_ID,
+        const response = await databases.listDocuments(
+            process.env.METRICS_DATABASE_ID,
+            process.env.METRICS_COLLECTION_ID,
             [
-                Databases.Query.greaterThan('timestamp', hoursAgo.toISOString()),
-                Databases.Query.orderDesc('timestamp'),
-                Databases.Query.limit(500)
+                Query.greaterThan('timestamp', timestamp.toISOString()),
+                Query.orderAsc('timestamp')
             ]
         );
+        
+        return response.documents;
     } catch (error) {
-        console.error('Failed to retrieve metrics from Appwrite:', error);
+        console.error('Error fetching metrics from Appwrite:', error);
+        return [];
+    }
+};
+
+// Function to create a log entry
+const createLog = async (severity, message, service = 'system', details = {}) => {
+    try {
+        return await databases.createDocument(
+            process.env.METRICS_DATABASE_ID,
+            process.env.LOGS_COLLECTION_ID,
+            'unique()',
+            {
+                severity,
+                message,
+                service,
+                details: JSON.stringify(details),
+                timestamp: new Date().toISOString()
+            }
+        );
+    } catch (error) {
+        console.error('Error creating log in Appwrite:', error);
         throw error;
+    }
+};
+
+// Function to get logs
+const getLogs = async (severity = null, hours = 24, limit = 50) => {
+    try {
+        const timestamp = new Date();
+        timestamp.setHours(timestamp.getHours() - hours);
+        
+        let queries = [
+            Query.greaterThan('timestamp', timestamp.toISOString()),
+            Query.orderDesc('timestamp'),
+            Query.limit(limit)
+        ];
+        
+        if (severity && severity !== 'all') {
+            queries.push(Query.equal('severity', severity));
+        }
+        
+        const response = await databases.listDocuments(
+            process.env.METRICS_DATABASE_ID,
+            process.env.LOGS_COLLECTION_ID,
+            queries
+        );
+        
+        return response.documents;
+    } catch (error) {
+        console.error('Error fetching logs from Appwrite:', error);
+        return [];
+    }
+};
+
+// Function to create an audit log
+const createAuditLog = async (userId, action, details = {}, ipAddress = null) => {
+    try {
+        return await databases.createDocument(
+            process.env.METRICS_DATABASE_ID,
+            process.env.AUDIT_LOGS_COLLECTION_ID,
+            'unique()',
+            {
+                userId,
+                action,
+                details: JSON.stringify(details),
+                ipAddress,
+                timestamp: new Date().toISOString()
+            }
+        );
+    } catch (error) {
+        console.error('Error creating audit log in Appwrite:', error);
+        // Fall back to console logging if database fails
+        console.log(`AUDIT: ${userId} - ${action} - ${JSON.stringify(details)}`);
     }
 };
 
 module.exports = {
     client,
     databases,
-    storeMetrics,
-    storeLog,
-    getRecentMetrics
+    getRecentMetrics,
+    createLog,
+    getLogs,
+    createAuditLog
 };
