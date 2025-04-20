@@ -2,42 +2,22 @@
 
 This is my silly JS (I'm gonna kms) project called StarAPI. It provides various endpoints for system information, health checks, and more. Also comes with a Discordbot :p
 
-## Prerequisites
-
-- Node.js
-- MariaDB
-- Basic linux knowladge
-- A brain
-- Git
-This is my silly JS (I'm gonna kms) project called StarAPI. It provides various endpoints for system information, health checks, and more. Also comes with a Discordbot :p
-
 ## Features
 
-- **Secure Authentication**: Encrypted token-based authentication
-- **System Monitoring**: Real-time metrics for CPU, memory, disk, and temperature
-- **Dashboard**: Interactive web dashboard for system metrics visualization
-- **Discord Bot**: Command-based monitoring through Discord
-- **Audit Logging**: Comprehensive tracking of all system operations
-- **Rate Limiting**: Protection against brute force and DoS attacks
+- **Secure Authentication**: JWT token-based authentication with encryption
+- **System Monitoring**: Real-time metrics for CPU, memory, disk, and network
+- **Discord Bot Integration**: Monitor your system through Discord commands
+- **Comprehensive Logging**: System, error, and audit logging
+- **Role-based Access Control**: Secure API endpoints with role permissions
 
-## Security Features
-
-- Encrypted authentication tokens (AES-256-GCM)
-- IP-based rate limiting for API endpoints
-- Role-based access control
-- Audit logging of all administrative actions
-- No direct command execution - only pre-defined whitelisted commands
-- Database-stored token verification
-
-## Installation
-
-### Prerequisites
+## Prerequisites
 
 - Node.js 18+
-- PostgreSQL database
-- Discord Bot Token (for Discord integration)
+- PostgreSQL
+- Basic Linux knowledge
+- Git
 
-### Setup
+## Installation
 
 1. Clone the repository:
    ```bash
@@ -50,75 +30,68 @@ This is my silly JS (I'm gonna kms) project called StarAPI. It provides various 
    npm install
    ```
 
-3. Set up the MariaDB database:
+3. Set up the PostgreSQL database:
 
-```sql
-CREATE DATABASE pulsed_api_backend;
-
-USE pulsed_api_backend;
-
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    secret VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL
-);
-
-CREATE TABLE bot_tokens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    token VARCHAR(255) UNIQUE NOT NULL
-);
-
-CREATE TABLE audit_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    message TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-4. Create a .env file with the following content:
-
-```env
-DB_HOST=localhost
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_NAME=pulsed_api_backend
-PASTEBIN_API_KEY=your_pastebin_api_key
-PASTEBIN_USER_NAME=your_pastebin_user_name
-PASTEBIN_USER_PASSWORD=your_pastebin_user_password
-```
-
-Replace the placeholders with your actual values.
-
-## Usage
-
-1. Start the API server:
-
-```sh
-npm start
-```
-
-## Endpoints
-
-- `POST /execute`: Execute a command on the server (admin only).
-- `POST /verify`: Verify the bot token or 2FA token.
-- `GET /apihealth`: Get the API health status.
-- `GET /health`: Get the server health status.
-- `GET /systeminfo`: Get the system information.
-- `GET /neofetch`: Get the neofetch output.
-- `GET /websiteStatus`: Check the status of a website.
-- `GET /logs`: Get the server logs (admin only).
-
-## Security
- 
-- **Rate Limiting**: Prevents brute force attacks by limiting the number of requests per IP.
-3. Set up environment variables:
-   Create a `.env` file based on `.env.example` with your configuration
-
-4. Run the setup script:
    ```bash
-   npm run setup
+   # Login as postgres user
+   sudo su - postgres
+   
+   # Access PostgreSQL CLI
+   psql
+   ```
+
+   Then create the database and tables:
+
+   ```sql
+   CREATE DATABASE starapi;
+   \c starapi
+   
+   CREATE TABLE users (
+       id SERIAL PRIMARY KEY,
+       username VARCHAR(255) UNIQUE NOT NULL,
+       password_hash VARCHAR(255) NOT NULL,
+       roles TEXT[] NOT NULL DEFAULT '{user}'
+   );
+   
+   CREATE TABLE user_tokens (
+       token_id UUID PRIMARY KEY,
+       user_id INTEGER REFERENCES users(id),
+       expires_at TIMESTAMP NOT NULL,
+       revoked BOOLEAN DEFAULT FALSE,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+   
+   CREATE TABLE bot_tokens (
+       bot_id VARCHAR(50) PRIMARY KEY,
+       token TEXT NOT NULL,
+       expires_at TIMESTAMP NOT NULL,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+   ```
+
+4. Create a `.env` file with your configuration:
+
+   ```env
+   # Server Configuration
+   PORT=3030
+   NODE_ENV=development
+   
+   # Database Configuration
+   DATABASE_URL=postgresql://username:password@localhost:5432/starapi
+   
+   # Security
+   JWT_SECRET=your_jwt_secret_key
+   ENCRYPTION_KEY=32_byte_hex_encryption_key
+   
+   # Discord Bot
+   DISCORD_TOKEN=your_discord_bot_token
+   CLIENT_ID=your_discord_client_id
+   DISCORD_ADMIN_IDS=discord_user_id1,discord_user_id2
+   VERIFIED_ROLE_ID=discord_role_id
+   
+   # Bot Authentication
+   BOT_SECRET=your_bot_secret
+   BOT_SECRETV2=your_bot_secret_v2
    ```
 
 5. Start the server:
@@ -126,67 +99,51 @@ npm start
    npm start
    ```
 
-## Environment Variables
+## API Endpoints
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `PORT` | Port for the API server (default: 3000) | No |
-| `NODE_ENV` | Environment (`development`, `production`) | Yes |
-| `DB_HOST` | PostgreSQL database host | Yes |
-| `DB_PORT` | PostgreSQL database port | No |
-| `DB_NAME` | PostgreSQL database name | Yes |
-| `DB_USER` | PostgreSQL database user | Yes |
-| `DB_PASSWORD` | PostgreSQL database password | Yes |
-| `JWT_SECRET` | Secret for signing JWT tokens | Yes |
-| `ENCRYPTION_KEY` | 32-byte hex key for token encryption | Yes |
-| `FRONTEND_URL` | URL of the frontend application (CORS) | Yes |
-| `DISCORD_TOKEN` | Discord bot token | For Discord bot |
-| `CLIENT_ID` | Discord client ID | For Discord bot |
-| `DISCORD_ADMIN_IDS` | Discord user IDs with admin access | For Discord bot |
-
-## Documentation
-
-### API Endpoints
-
-#### Authentication
-- `POST /api/auth/login` - Authenticate and receive a token
+### Authentication
+- `POST /api/auth/login` - Authenticate and get token
 - `POST /api/auth/logout` - Invalidate current token
 - `GET /api/auth/me` - Get current user info
+- `POST /api/auth/users` - Create new user (admin only)
+- `POST /api/auth/bot-token` - Generate bot token
 
-#### System Monitoring
-- `GET /api/system/health` - Basic system health information
-- `GET /api/system/metrics` - Detailed system metrics
-- `GET /api/system/metrics/history` - Historical metrics data
+### System
+- `GET /api/system/health` - Basic health check and uptime
+- `GET /api/system/metrics` - Detailed system metrics (CPU, memory, disk, network)
+- `GET /api/system/info` - System information (OS, CPU, hardware details)
+- `GET /api/system/network` - Network interfaces and statistics
+- `POST /api/system/commands` - Execute system commands (admin only)
 
-#### Logs
-- `GET /api/logs` - Retrieve system logs
-- `GET /api/logs/audit` - Retrieve audit logs
+### Logs
+- `GET /api/logs` - Retrieve system logs with filtering options
+- `GET /api/logs/audit` - Access audit logs (admin only)
 
-### Dashboard
+## Discord Bot Commands
 
-The dashboard is available at `http://localhost:3000` (or your configured URL) after starting the server.
-
-### Discord Commands
-
-- `/status` - Show current system status
-- `/metrics` - Display detailed system metrics
-- `/logs [severity] [hours]` - Show recent logs (admin only)
+- `/status` - Display current system status
+- `/metrics` - Show detailed system metrics
+- `/logs [severity] [hours]` - View recent logs (admin/verified only)
 - `/reboot` - Reboot the system (admin only)
+- `/system-info` - Show detailed system information
+- `/network-info` - Display network interface details
+
+## Security Features
+
+- Encrypted JWT tokens using AES-256-GCM
+- Database token validation and revocation
+- Role-based access control for API endpoints
+- Comprehensive audit logging
+- Rate limiting to prevent brute force attacks
 
 ## Development
 
-### Running in Development Mode
-
+Run in development mode with auto-restart:
 ```bash
 npm run dev
 ```
 
-### Running the Bot Separately
-
+Run the Discord bot separately:
 ```bash
 npm run bot
 ```
-
-## License
-
-MIT

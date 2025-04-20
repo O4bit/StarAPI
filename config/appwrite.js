@@ -1,6 +1,5 @@
 const { Client, Databases, Query } = require('node-appwrite');
 
-// Initialize Appwrite client
 const client = new Client();
 
 client
@@ -10,7 +9,6 @@ client
 
 const databases = new Databases(client);
 
-// Function to get recent metrics
 const getRecentMetrics = async (hours = 24) => {
     try {
         const timestamp = new Date();
@@ -32,7 +30,6 @@ const getRecentMetrics = async (hours = 24) => {
     }
 };
 
-// Function to create a log entry
 const createLog = async (severity, message, service = 'system', details = {}) => {
     try {
         return await databases.createDocument(
@@ -53,7 +50,6 @@ const createLog = async (severity, message, service = 'system', details = {}) =>
     }
 };
 
-// Function to get logs
 const getLogs = async (severity = null, hours = 24, limit = 50) => {
     try {
         const timestamp = new Date();
@@ -82,7 +78,6 @@ const getLogs = async (severity = null, hours = 24, limit = 50) => {
     }
 };
 
-// Function to create an audit log
 const createAuditLog = async (userId, action, details = {}, ipAddress = null) => {
     try {
         return await databases.createDocument(
@@ -99,7 +94,6 @@ const createAuditLog = async (userId, action, details = {}, ipAddress = null) =>
         );
     } catch (error) {
         console.error('Error creating audit log in Appwrite:', error);
-        // Fall back to console logging if database fails
         console.log(`AUDIT: ${userId} - ${action} - ${JSON.stringify(details)}`);
     }
 };

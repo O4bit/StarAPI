@@ -99,6 +99,28 @@ const verifyEncryptedToken = async (encryptedToken) => {
     }
 };
 
+const createRefreshToken = async (userId) => {
+    try {
+        const tokenId = crypto.randomUUID();
+        
+        const refreshToken = jwt.sign(
+            { id: userId, type: 'refresh', jti: tokenId },
+            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+        
+        await db.query(
+            'INSERT INTO refresh_tokens (token_id, user_id, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'7 days\')',
+            [tokenId, userId]
+        );
+        
+        return refreshToken;
+    } catch (error) {
+        console.error('Refresh token creation error:', error);
+        throw new Error('Failed to create refresh token');
+    }
+};
+
 module.exports = {
     generateEncryptionKey,
     encrypt,
