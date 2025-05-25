@@ -6,7 +6,7 @@
     "scripts": {
         "prestart": "node scripts/setup.js --check",
         "start": "node server.js",
-        "heroku-postbuild": "npm run db:migrate",
+        "heroku-postbuild": "echo 'Build completed'",
         "setup-heroku": "node scripts/setup-heroku.js",
         "build": "npm install && npm run fix-permissions && npm rebuild bcrypt --build-from-source && node scripts/setup.js",
         "dev": "nodemon server.js",
@@ -54,8 +54,8 @@
     "author": "O4bit",
     "license": "MIT",
     "engines": {
-        "node": ">=16.0.0",
-        "npm": ">=8.0.0"
+        "node": "18.x",
+        "npm": "9.x"
     },
     "repository": {
         "type": "git",

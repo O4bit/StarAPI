@@ -7,7 +7,7 @@ const logger = require('./utils/logger');
 const { pool } = require('./config/database');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3030;
 
 // Middleware
 app.use(helmet());
@@ -42,12 +42,12 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// API routes
-app.get('/api', (req, res) => {
+// Basic API endpoint
+app.get('/', (req, res) => {
     res.json({
         message: 'StarAPI is running!',
-        version: '1.0.0',
-        documentation: '/api/docs'
+        api_url: process.env.API_URL,
+        environment: process.env.NODE_ENV
     });
 });
 
@@ -71,7 +71,7 @@ process.on('SIGINT', async () => {
 
 app.listen(PORT, () => {
     logger.info(`StarAPI server running on port ${PORT}`);
-    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`Environment: ${process.env.NODE_ENV}`);
 });
 
 module.exports = app;
