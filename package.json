@@ -6,7 +6,7 @@
     "scripts": {
         "prestart": "node scripts/setup.js --check",
         "start": "node server.js",
-        "heroku-postbuild": "echo 'Build completed'",
+        "heroku-postbuild": "echo 'Build completed successfully'",
         "setup-heroku": "node scripts/setup-heroku.js",
         "build": "npm install && npm run fix-permissions && npm rebuild bcrypt --build-from-source && node scripts/setup.js",
         "dev": "nodemon server.js",
@@ -38,8 +38,6 @@
         "jsonwebtoken": "^9.0.2",
         "morgan": "^1.10.0",
         "node-appwrite": "^16.0.0",
-        "pg": "^8.11.3",
-        "pg-hstore": "^2.3.4",
         "qrcode": "^1.5.3",
         "speakeasy": "^2.0.0",
         "swagger-jsdoc": "^6.2.8",
