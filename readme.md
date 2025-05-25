@@ -13,11 +13,77 @@ This is my silly JS (I'm gonna kms) project called StarAPI. It provides various 
 ## Prerequisites
 
 - Node.js 18+
-- PostgreSQL
+- PostgreSQL (or Heroku Postgres for cloud deployment)
 - Basic Linux knowledge
 - Git
 
-## Installation
+## Heroku Deployment
+
+### Quick Deploy
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+
+### Manual Deployment
+
+1. **Install Heroku CLI** and login:
+   ```bash
+   heroku login
+   ```
+
+2. **Create a new Heroku app**:
+   ```bash
+   heroku create your-starapi-app
+   ```
+
+3. **Add Heroku Postgres addon**:
+   ```bash
+   heroku addons:create heroku-postgresql:mini
+   ```
+
+4. **Set environment variables**:
+   ```bash
+   heroku config:set NODE_ENV=production
+   heroku config:set JWT_SECRET=$(openssl rand -hex 32)
+   heroku config:set ENCRYPTION_KEY=$(openssl rand -hex 32)
+   heroku config:set BOT_SECRET=$(openssl rand -hex 16)
+   heroku config:set BOT_SECRETV2=$(openssl rand -hex 32)
+   heroku config:set DISCORD_TOKEN=your_discord_bot_token
+   heroku config:set CLIENT_ID=your_discord_client_id
+   heroku config:set DISCORD_ADMIN_IDS=your_discord_user_id
+   ```
+
+5. **Deploy the application**:
+   ```bash
+   git push heroku main
+   ```
+
+6. **Scale the dynos**:
+   ```bash
+   heroku ps:scale web=1 worker=1
+   ```
+
+7. **View logs**:
+   ```bash
+   heroku logs --tail
+   ```
+
+### Environment Variables for Heroku
+
+Required environment variables:
+- `DATABASE_URL` (automatically set by Heroku Postgres)
+- `NODE_ENV=production`
+- `JWT_SECRET` (32-byte hex string)
+- `ENCRYPTION_KEY` (32-byte hex string)
+- `DISCORD_TOKEN` (Discord bot token)
+- `CLIENT_ID` (Discord application client ID)
+- `BOT_SECRET` (Bot authentication secret)
+- `BOT_SECRETV2` (Bot API token)
+
+Optional:
+- `DISCORD_ADMIN_IDS` (Comma-separated Discord user IDs)
+- `FRONTEND_URL` (Frontend application URL)
+- `ADMIN_PASSWORD` (Custom admin password, otherwise random)
+
+## Local Installation
 
 1. Clone the repository:
    ```bash
@@ -31,7 +97,6 @@ This is my silly JS (I'm gonna kms) project called StarAPI. It provides various 
    ```
 
 3. Set up the PostgreSQL database:
-
    ```bash
    # Login as postgres user
    sudo su - postgres
@@ -41,7 +106,6 @@ This is my silly JS (I'm gonna kms) project called StarAPI. It provides various 
    ```
 
    Then create the database and tables:
-
    ```sql
    CREATE DATABASE starapi;
    \c starapi
@@ -70,7 +134,6 @@ This is my silly JS (I'm gonna kms) project called StarAPI. It provides various 
    ```
 
 4. Create a `.env` file with your configuration:
-
    ```env
    # Server Configuration
    PORT=3030
@@ -147,3 +210,15 @@ Run the Discord bot separately:
 ```bash
 npm run bot
 ```
+
+## Troubleshooting
+
+### Heroku Issues
+- Check logs: `heroku logs --tail`
+- Restart app: `heroku restart`
+- Check dyno status: `heroku ps`
+- View config: `heroku config`
+
+### Database Issues
+- Reset database: `heroku pg:reset DATABASE_URL`
+- Run setup again: `heroku run npm run setup-heroku`

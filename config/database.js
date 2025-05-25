@@ -1,33 +1,29 @@
 const { Pool } = require('pg');
+const logger = require('../utils/logger');
 
-const pool = new Pool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 5432,
+const isProduction = process.env.NODE_ENV === 'production';
+
+const config = {
+    connectionString: process.env.DATABASE_URL,
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
-    ssl: process.env.DB_SSL === 'true' ? {
-        rejectUnauthorized: false
-    } : false
-});
+};
 
-pool.query('SELECT NOW()', (err) => {
-    if (err) {
-        console.error('Database connection error:', err);
-    } else {
-        console.log('Database connected successfully');
-    }
+const pool = new Pool(config);
+
+pool.on('connect', () => {
+    logger.info('Connected to PostgreSQL database');
 });
 
 pool.on('error', (err) => {
-    console.error('Unexpected database error:', err);
+    logger.error('Unexpected error on idle client', err);
+    process.exit(-1);
 });
 
 module.exports = {
+    pool,
     query: (text, params) => pool.query(text, params),
-    getClient: () => pool.connect(),
-    pool
+    getClient: () => pool.connect()
 };

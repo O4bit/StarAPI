@@ -16,6 +16,7 @@ const { apiLimiter, authLimiter } = require('./middleware/ratelimiter');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(helmet({
     contentSecurityPolicy: {
@@ -30,9 +31,9 @@ app.use(helmet({
     referrerPolicy: { policy: 'same-origin' }
 }));
 app.use(bodyParser.json());
-app.use(morgan('combined'));
+app.use(morgan(isProduction ? 'combined' : 'dev'));
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'https://your-frontend-domain.vercel.app',
+    origin: process.env.FRONTEND_URL || (isProduction ? false : 'http://localhost:3000'),
     credentials: true
 }));
 
@@ -48,9 +49,12 @@ app.use('/api/logs', logsRoutes);
 app.use('/api/auth', authRoutes);
 
 const debugRoutes = require('./routes/debug');
-
 app.use('/api/debug', debugRoutes);
-require('./services/metrics-collector');
+
+// Only start metrics collector if not on Heroku or if explicitly enabled
+if (!process.env.DYNO || process.env.ENABLE_METRICS === 'true') {
+    require('./services/metrics-collector');
+}
 
 const listEndpoints = require('express-list-endpoints');
 console.log('Registered API routes:', 
@@ -60,24 +64,13 @@ app.get('/test', (req, res) => {
     res.json({ status: 'API is working' });
   });
   
-app.listen(port, () => {
-    console.log(`API listening at http://localhost:${port}`);
-}).on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`Port ${port} is already in use`);
-        process.exit(1);
-    } else {
-        throw err;
-    }
-});
-
-app.use(errorHandler);
-
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         uptime: process.uptime(),
-        timestamp: new Date()
+        timestamp: new Date(),
+        environment: process.env.NODE_ENV,
+        version: require('./package.json').version
     });
 });
 
@@ -101,3 +94,17 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`API listening at http://0.0.0.0:${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV}`);
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${port} is already in use`);
+        process.exit(1);
+    } else {
+        throw err;
+    }
+});
+
+app.use(errorHandler);

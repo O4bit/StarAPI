@@ -1,0 +1,59 @@
+{
+  "name": "StarAPI",
+  "description": "System monitoring API with Discord bot integration",
+  "repository": "https://github.com/O4bit/StarAPI",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "keywords": ["node", "express", "api", "discord", "monitoring"],
+  "image": "heroku/nodejs",
+  "addons": [
+    {
+      "plan": "heroku-postgresql:mini"
+    }
+  ],
+  "env": {
+    "NODE_ENV": {
+      "description": "Node.js environment",
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "description": "JWT secret key for token signing",
+      "generator": "secret"
+    },
+    "ENCRYPTION_KEY": {
+      "description": "32-byte hex encryption key",
+      "generator": "secret"
+    },
+    "BOT_SECRET": {
+      "description": "Bot authentication secret",
+      "generator": "secret"
+    },
+    "BOT_SECRETV2": {
+      "description": "Bot API token",
+      "generator": "secret"
+    },
+    "DISCORD_TOKEN": {
+      "description": "Discord bot token"
+    },
+    "CLIENT_ID": {
+      "description": "Discord client ID"
+    },
+    "DISCORD_ADMIN_IDS": {
+      "description": "Comma-separated Discord admin user IDs"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "eco"
+    },
+    "worker": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ]
+}
