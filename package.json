@@ -6,7 +6,7 @@
     "scripts": {
         "prestart": "node scripts/setup.js --check",
         "start": "node server.js",
-        "heroku-postbuild": "echo 'Build completed successfully'",
+        "heroku-postbuild": "node scripts/heroku-setup.js",
         "setup-heroku": "node scripts/setup-heroku.js",
         "build": "npm install && npm run fix-permissions && npm rebuild bcrypt --build-from-source && node scripts/setup.js",
         "dev": "nodemon server.js",
