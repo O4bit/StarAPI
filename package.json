@@ -38,6 +38,7 @@
         "jsonwebtoken": "^9.0.2",
         "morgan": "^1.10.0",
         "node-appwrite": "^16.0.0",
+        "pg": "^8.13.3",
         "qrcode": "^1.5.3",
         "speakeasy": "^2.0.0",
         "swagger-jsdoc": "^6.2.8",
