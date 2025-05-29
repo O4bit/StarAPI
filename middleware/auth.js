@@ -1,32 +1,31 @@
 const { verifyEncryptedToken } = require('../utils/encryption');
 const { logAudit } = require('../services/audit-logger');
 
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (!token) {
-        return res.status(401).json({ error: 'Authentication token required' });
-    }
-    
-    if (token === process.env.BOT_SECRETV2) {
-        console.log('Bot authenticated with BOT_SECRETV2');
-        req.user = {
-            id: 'bot',
-            role: 'bot',
-            isBotRequest: true,
-            roles: ['bot', 'admin']
-        };
-        return next();
-    }
-    
+const authenticateToken = async (req, res, next) => {
     try {
+        const authHeader = req.headers.authorization;
+        const token = authHeader && authHeader.split(' ')[1];
+        
+        if (!token) {
+            return res.status(401).json({ error: 'Access token required' });
+        }
+        
+        // Check if it's a bot token (BOT_SECRETV2)
+        if (token === process.env.BOT_SECRETV2) {
+            req.user = { 
+                bot_id: 'discord_bot', 
+                roles: ['admin', 'bot'],
+                id: 'discord_bot'
+            };
+            return next();
+        }
+        
         const decoded = verifyEncryptedToken(token);
         req.user = decoded;
         next();
     } catch (error) {
-        console.error('Token verification error:', error);
-        return res.status(403).json({ error: 'Invalid token' });
+        console.error('Authentication error:', error);
+        return res.status(403).json({ error: 'Invalid or expired token' });
     }
 };
 

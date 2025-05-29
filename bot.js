@@ -655,10 +655,10 @@ async function handleConsole(interaction) {
             guild: interaction.guild.name
         });
         
+        // Send the command directly as the command parameter
         const response = await axios.post(`${API_BASE_URL}/api/system/commands`, 
             { 
-                command: 'raw-command',
-                args: command
+                command: command
             },
             { 
                 headers: { 
@@ -669,7 +669,7 @@ async function handleConsole(interaction) {
             }
         );
         
-        const output = response.data.output || 'Command executed successfully';
+        const output = response.data.output || response.data.result || 'Command executed successfully';
         const error = response.data.error;
         
         let displayOutput = output;

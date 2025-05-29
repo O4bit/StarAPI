@@ -4,6 +4,9 @@ const si = require('systeminformation');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit-logger');
 const { getRecentMetrics } = require('../config/appwrite');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 router.get('/health', authenticateToken, async (req, res) => {
     try {
@@ -69,41 +72,130 @@ router.get('/metrics/history', authenticateToken, async (req, res) => {
     }
 });
 
-router.post('/commands', authenticateToken, requireRole('admin'), async (req, res) => {
-    const { command } = req.body;
-    
-    const allowedCommands = {
-        'disk-usage': 'df -h',
-        'memory-info': 'free -m',
-        'process-list': 'ps aux | head -20',
-        'network-connections': 'netstat -tuln'
-    };
-    
-    if (!command || !allowedCommands[command]) {
-        return res.status(400).json({ error: 'Invalid or unsupported command' });
-    }
-    
+router.post('/commands', authenticateToken, async (req, res) => {
     try {
-        await logAudit(req.user.id, 'system-command', { command });
+        const { command } = req.body;
         
-        const { exec } = require('child_process');
+        if (!command) {
+            return res.status(400).json({ error: 'Command is required' });
+        }
         
-        exec(allowedCommands[command], { timeout: 5000 }, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Command execution error: ${error}`);
-                return res.status(500).json({ error: 'Command execution failed' });
-            }
-            
-            res.json({ output: stdout });
+        // Check if user has admin role for security
+        if (!req.user.roles || !req.user.roles.includes('admin')) {
+            return res.status(403).json({ error: 'Admin access required for command execution' });
+        }
+        
+        console.log(`Executing command: ${command}`);
+        
+        let result;
+        
+        // Handle predefined safe commands
+        switch (command) {
+            case 'system-reboot':
+                await logAudit(req.user.id || req.user.bot_id, 'system-reboot', {
+                    timestamp: new Date(),
+                    source: 'api'
+                });
+                result = await execAsync('sudo reboot');
+                break;
+                
+            case 'disk-usage':
+                result = await execAsync('df -h');
+                break;
+                
+            case 'memory-info':
+                result = await execAsync('free -h');
+                break;
+                
+            case 'process-list':
+                result = await execAsync('ps aux | head -20');
+                break;
+                
+            case 'network-connections':
+                result = await execAsync('netstat -tulpn | head -20');
+                break;
+                
+            case 'uptime':
+                result = await execAsync('uptime');
+                break;
+                
+            case 'cpu-info':
+                result = await execAsync('lscpu');
+                break;
+                
+            default:
+                // Execute raw command (security risk - only for admin users)
+                console.log(`Executing raw command: ${command}`);
+                
+                // Basic security checks - prevent dangerous commands
+                const dangerousCommands = [
+                    'rm -rf',
+                    'dd if=',
+                    'mkfs',
+                    'format',
+                    'fdisk',
+                    'deluser',
+                    'userdel',
+                    'shutdown',
+                    'halt',
+                    'poweroff',
+                    '>/dev/',
+                    'chmod 777',
+                    'chown root'
+                ];
+                
+                const isDangerous = dangerousCommands.some(dangerous => 
+                    command.toLowerCase().includes(dangerous.toLowerCase())
+                );
+                
+                if (isDangerous) {
+                    return res.status(400).json({ 
+                        error: 'Command contains potentially dangerous operations and is blocked',
+                        blocked_command: command
+                    });
+                }
+                
+                // Log the raw command execution
+                await logAudit(req.user.id || req.user.bot_id, 'raw-command', {
+                    command,
+                    timestamp: new Date(),
+                    source: 'api'
+                });
+                
+                // Execute the raw command with timeout
+                result = await execAsync(command, { 
+                    timeout: 30000, // 30 second timeout
+                    maxBuffer: 1024 * 1024 // 1MB max output
+                });
+                break;
+        }
+        
+        res.json({
+            success: true,
+            command,
+            output: result.stdout,
+            error: result.stderr || null,
+            timestamp: new Date()
         });
+        
     } catch (error) {
         console.error('Command execution error:', error);
-        res.status(500).json({ error: 'Failed to execute command' });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            command: req.body.command,
+            timestamp: new Date()
+        });
+        
+        // Log the error
+        await logAudit(req.user.id || req.user.bot_id, 'command-error', {
+            command: req.body.command,
+            error: error.message,
+            timestamp: new Date()
+        });
     }
 });
-
-module.exports = router;
-
 
 router.get('/info', authenticateToken, async (req, res) => {
     try {
@@ -224,3 +316,5 @@ router.get('/network', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch network information' });
     }
 });
+
+module.exports = router;
