@@ -17,30 +17,30 @@ const BOT_API_TOKEN = process.env.BOT_SECRETV2;
 const ADMIN_IDS = process.env.DISCORD_ADMIN_IDS ? 
     process.env.DISCORD_ADMIN_IDS.split(',') : [];
 
-// Handle Heroku environment
+// Handle Heroku environment - fix API URL configuration
 const isHeroku = !!process.env.DYNO;
-const API_BASE_URL = isHeroku 
+const API_BASE_URL = process.env.API_URL || (isHeroku 
     ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
-    : process.env.API_URL || `http://localhost:${process.env.PORT || 3030}`;
+    : `http://localhost:${process.env.PORT || 3030}`);
 
 console.log(`Bot starting in ${isHeroku ? 'Heroku' : 'local'} environment`);
 console.log(`API Base URL: ${API_BASE_URL}`);
 
-// Only import database-dependent modules if not in Heroku or if database is available
+// Only import database-dependent modules if database is available
 let logAudit, db;
 try {
-    if (!isHeroku || process.env.DATABASE_URL) {
+    if (process.env.DATABASE_URL) {
         logAudit = require('./services/audit-logger').logAudit;
         db = require('./config/database');
     } else {
-        // Fallback audit logging for Heroku without database
-        logAudit = (userId, action, details) => {
+        // Fallback audit logging when database isn't available
+        logAudit = async (userId, action, details) => {
             console.log(`AUDIT: ${userId} - ${action} - ${JSON.stringify(details)}`);
         };
     }
 } catch (error) {
     console.warn('Database modules not available, using fallback logging:', error.message);
-    logAudit = (userId, action, details) => {
+    logAudit = async (userId, action, details) => {
         console.log(`AUDIT: ${userId} - ${action} - ${JSON.stringify(details)}`);
     };
 }
