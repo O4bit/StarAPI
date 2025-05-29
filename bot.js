@@ -443,19 +443,11 @@ async function registerCommands() {
                 
             new SlashCommandBuilder()
                 .setName('console')
-                .setDescription('Execute system commands (admin only)')
+                .setDescription('Execute raw Linux commands on the server (admin only)')
                 .addStringOption(option => 
                     option.setName('command')
-                        .setDescription('Command to execute')
+                        .setDescription('Linux command to execute (e.g., ls -la, ps aux, df -h)')
                         .setRequired(true)
-                        .addChoices(
-                            { name: 'Disk Usage', value: 'disk-usage' },
-                            { name: 'Memory Info', value: 'memory-info' },
-                            { name: 'Process List', value: 'process-list' },
-                            { name: 'Network Connections', value: 'network-connections' },
-                            { name: 'System Uptime', value: 'uptime' },
-                            { name: 'CPU Info', value: 'cpu-info' }
-                        )
                 )
         ];
         
@@ -654,7 +646,7 @@ async function handleConsole(interaction) {
     try {
         const command = interaction.options.getString('command');
         
-        console.log(`Executing console command: ${command}`);
+        console.log(`Executing raw command: ${command}`);
         
         await logAudit(interaction.user.id, 'console-command', {
             command,
@@ -664,48 +656,89 @@ async function handleConsole(interaction) {
         });
         
         const response = await axios.post(`${API_BASE_URL}/api/system/commands`, 
-            { command },
+            { 
+                command: 'raw-command',
+                args: command
+            },
             { 
                 headers: { 
                     'Authorization': `Bearer ${BOT_API_TOKEN}`,
                     'User-Agent': 'StarAPI-Bot/1.0'
                 },
-                timeout: 10000
+                timeout: 15000
             }
         );
         
         const output = response.data.output || 'Command executed successfully';
-        const truncatedOutput = output.length > 1900 ? 
-            output.substring(0, 1900) + '\n... (output truncated)' : 
-            output;
+        const error = response.data.error;
         
-        const embed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle(`Console Command: ${command}`)
-            .setDescription(`\`\`\`\n${truncatedOutput}\n\`\`\``)
-            .setTimestamp()
-            .setFooter({ text: 'StarAPI Console' });
+        let displayOutput = output;
+        if (error) {
+            displayOutput = `ERROR: ${error}\n\nOutput: ${output}`;
+        }
         
-        await interaction.editReply({ embeds: [embed] });
+        // Split output if too long for Discord
+        if (displayOutput.length > 1900) {
+            const chunks = displayOutput.match(/.{1,1900}/g);
+            
+            const embed = new EmbedBuilder()
+                .setColor(error ? 0xFF0000 : 0x00FF00)
+                .setTitle(`Console: ${command}`)
+                .setDescription(`\`\`\`bash\n${chunks[0]}\n\`\`\``)
+                .setTimestamp()
+                .setFooter({ text: 'StarAPI Console' });
+            
+            await interaction.editReply({ embeds: [embed] });
+            
+            // Send additional chunks as follow-up messages
+            for (let i = 1; i < chunks.length && i < 3; i++) {
+                await interaction.followUp({
+                    content: `\`\`\`bash\n${chunks[i]}\n\`\`\``,
+                    ephemeral: true
+                });
+            }
+            
+            if (chunks.length > 3) {
+                await interaction.followUp({
+                    content: `... (${chunks.length - 3} more chunks truncated)`,
+                    ephemeral: true
+                });
+            }
+        } else {
+            const embed = new EmbedBuilder()
+                .setColor(error ? 0xFF0000 : 0x00FF00)
+                .setTitle(`Console: ${command}`)
+                .setDescription(`\`\`\`bash\n${displayOutput}\n\`\`\``)
+                .setTimestamp()
+                .setFooter({ text: 'StarAPI Console' });
+            
+            await interaction.editReply({ embeds: [embed] });
+        }
         
-        console.log('Console command executed successfully');
+        console.log('Raw command executed successfully');
     } catch (error) {
         console.error('Console command error:', error);
         
-        let errorMessage = 'Failed to execute console command';
+        let errorMessage = 'Failed to execute command';
         if (error.response) {
             errorMessage += ` (Status: ${error.response.status})`;
             if (error.response.status === 403) {
                 errorMessage += ' - Authentication failed';
             } else if (error.response.status === 400) {
                 errorMessage += ' - Invalid command';
+            } else if (error.response.data && error.response.data.error) {
+                errorMessage += `: ${error.response.data.error}`;
             }
         }
         
-        await interaction.editReply({
-            content: errorMessage,
-            ephemeral: true
-        });
+        const embed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('Command Failed')
+            .setDescription(`\`\`\`\n${errorMessage}\n\`\`\``)
+            .setTimestamp()
+            .setFooter({ text: 'StarAPI Console' });
+        
+        await interaction.editReply({ embeds: [embed] });
     }
 }
 
