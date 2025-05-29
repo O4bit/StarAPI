@@ -9,11 +9,42 @@ const {
     PermissionFlagsBits
 } = require('discord.js');
 const axios = require('axios');
-const { encrypt, verifyEncryptedToken } = require('./utils/encryption');
-const { logAudit } = require('./services/audit-logger');
-const db = require('./config/database');
 const jwt = require('jsonwebtoken');
+
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const BOT_API_TOKEN = process.env.BOT_SECRETV2;
+const ADMIN_IDS = process.env.DISCORD_ADMIN_IDS ? 
+    process.env.DISCORD_ADMIN_IDS.split(',') : [];
+
+// Handle Heroku environment
+const isHeroku = !!process.env.DYNO;
+const API_BASE_URL = isHeroku 
+    ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
+    : process.env.API_URL || `http://localhost:${process.env.PORT || 3030}`;
+
+console.log(`Bot starting in ${isHeroku ? 'Heroku' : 'local'} environment`);
+console.log(`API Base URL: ${API_BASE_URL}`);
+
+// Only import database-dependent modules if not in Heroku or if database is available
+let logAudit, db;
+try {
+    if (!isHeroku || process.env.DATABASE_URL) {
+        logAudit = require('./services/audit-logger').logAudit;
+        db = require('./config/database');
+    } else {
+        // Fallback audit logging for Heroku without database
+        logAudit = (userId, action, details) => {
+            console.log(`AUDIT: ${userId} - ${action} - ${JSON.stringify(details)}`);
+        };
+    }
+} catch (error) {
+    console.warn('Database modules not available, using fallback logging:', error.message);
+    logAudit = (userId, action, details) => {
+        console.log(`AUDIT: ${userId} - ${action} - ${JSON.stringify(details)}`);
+    };
+}
+
 const client = new Client({ 
     intents: [
         GatewayIntentBits.Guilds, 
@@ -55,12 +86,6 @@ client.login(DISCORD_TOKEN).catch(error => {
     console.error('Failed to login to Discord:', error);
     process.exit(1);
 });
-const CLIENT_ID = process.env.CLIENT_ID;
-const API_URL = process.env.API_URL || 'http://localhost:3000/api';
-const BOT_API_TOKEN = process.env.BOT_SECRETV2;
-
-const ADMIN_IDS = process.env.DISCORD_ADMIN_IDS ? 
-    process.env.DISCORD_ADMIN_IDS.split(',') : [];
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
@@ -70,7 +95,8 @@ client.once('ready', async () => {
         
         await logAudit('system', 'bot-startup', {
             botTag: client.user.tag,
-            timestamp: new Date()
+            timestamp: new Date(),
+            environment: isHeroku ? 'heroku' : 'local'
         });
         
         console.log('Bot fully initialized and ready');
@@ -165,10 +191,6 @@ client.on('interactionCreate', async interaction => {
         });
     }
 });
-
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? process.env.API_URL 
-    : `http://localhost:${process.env.PORT || 3030}`;
 
 async function handleStatus(interaction) {
     await interaction.deferReply();
@@ -605,3 +627,16 @@ async function handleNetworkInfo(interaction) {
         await interaction.editReply(`Failed to retrieve network information: ${error.message}`);
     }
 }
+
+// Graceful shutdown for Heroku
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM, shutting down gracefully...');
+    client.destroy();
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT, shutting down gracefully...');
+    client.destroy();
+    process.exit(0);
+});
