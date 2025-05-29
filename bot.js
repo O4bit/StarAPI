@@ -126,7 +126,7 @@ client.on('interactionCreate', async interaction => {
     });
 
     try {
-        if (commandName === 'logs' && !isAdmin && !hasVerifiedRole) {
+        if ((commandName === 'logs' || commandName === 'console') && !isAdmin && !hasVerifiedRole) {
             return interaction.reply({
                 content: 'You do not have permission to use this command.',
                 ephemeral: true
@@ -158,6 +158,9 @@ client.on('interactionCreate', async interaction => {
                 break;
             case 'network-info':
                 await handleNetworkInfo(interaction);
+                break;
+            case 'console':
+                await handleConsole(interaction);
                 break;
             default:
                 console.log(`Unknown command received: ${commandName}`);
@@ -436,7 +439,24 @@ async function registerCommands() {
                 
             new SlashCommandBuilder()
                 .setName('network-info')
-                .setDescription('Get detailed network information and statistics')
+                .setDescription('Get detailed network information and statistics'),
+                
+            new SlashCommandBuilder()
+                .setName('console')
+                .setDescription('Execute system commands (admin only)')
+                .addStringOption(option => 
+                    option.setName('command')
+                        .setDescription('Command to execute')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'Disk Usage', value: 'disk-usage' },
+                            { name: 'Memory Info', value: 'memory-info' },
+                            { name: 'Process List', value: 'process-list' },
+                            { name: 'Network Connections', value: 'network-connections' },
+                            { name: 'System Uptime', value: 'uptime' },
+                            { name: 'CPU Info', value: 'cpu-info' }
+                        )
+                )
         ];
         
         const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
@@ -625,6 +645,67 @@ async function handleNetworkInfo(interaction) {
     } catch (error) {
         console.error('Network info command error:', error);
         await interaction.editReply(`Failed to retrieve network information: ${error.message}`);
+    }
+}
+
+async function handleConsole(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    
+    try {
+        const command = interaction.options.getString('command');
+        
+        console.log(`Executing console command: ${command}`);
+        
+        await logAudit(interaction.user.id, 'console-command', {
+            command,
+            user: interaction.user.tag,
+            channel: interaction.channel.name,
+            guild: interaction.guild.name
+        });
+        
+        const response = await axios.post(`${API_BASE_URL}/api/system/commands`, 
+            { command },
+            { 
+                headers: { 
+                    'Authorization': `Bearer ${BOT_API_TOKEN}`,
+                    'User-Agent': 'StarAPI-Bot/1.0'
+                },
+                timeout: 10000
+            }
+        );
+        
+        const output = response.data.output || 'Command executed successfully';
+        const truncatedOutput = output.length > 1900 ? 
+            output.substring(0, 1900) + '\n... (output truncated)' : 
+            output;
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle(`Console Command: ${command}`)
+            .setDescription(`\`\`\`\n${truncatedOutput}\n\`\`\``)
+            .setTimestamp()
+            .setFooter({ text: 'StarAPI Console' });
+        
+        await interaction.editReply({ embeds: [embed] });
+        
+        console.log('Console command executed successfully');
+    } catch (error) {
+        console.error('Console command error:', error);
+        
+        let errorMessage = 'Failed to execute console command';
+        if (error.response) {
+            errorMessage += ` (Status: ${error.response.status})`;
+            if (error.response.status === 403) {
+                errorMessage += ' - Authentication failed';
+            } else if (error.response.status === 400) {
+                errorMessage += ' - Invalid command';
+            }
+        }
+        
+        await interaction.editReply({
+            content: errorMessage,
+            ephemeral: true
+        });
     }
 }
 
